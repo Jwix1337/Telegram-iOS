@@ -8,6 +8,8 @@ on:
 
 jobs:
   build:
+    # The inherited release workflow is only configured for the official project.
+    if: github.repository == 'TelegramMessenger/Telegram-iOS'
     runs-on: macos-13
 
     steps:

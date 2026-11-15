@@ -1,0 +1,85 @@
+name: Snow Effect — cloud simulator checks
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: snow-effect-cloud-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  simulator:
+    # GitHub-hosted Apple Silicon; no personal Mac or signing certificate needed.
+    # Public preview image: availability/resources depend on the GitHub account.
+    runs-on: xcode-27
+    timeout-minutes: 180
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Prepare simulator-only configuration
+        shell: bash
+        env:
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+        run: |
+          set -euo pipefail
+          sudo xcode-select --switch "$DEVELOPER_DIR"
+          python3 - <<'PY'
+          import json, os, platform, subprocess
+          from pathlib import Path
+          versions = json.loads(Path('versions.json').read_text())
+          actual = subprocess.check_output(['xcodebuild', '-version'], text=True).splitlines()[0]
+          assert actual == 'Xcode ' + versions['xcode'], (actual, versions['xcode'])
+          assert platform.mac_ver()[0].split('.')[0] == versions['macos'].split('.')[0]
+          api_id = os.environ['TELEGRAM_API_ID'].strip()
+          api_hash = os.environ['TELEGRAM_API_HASH'].strip()
+          if not api_id.isdecimal() or int(api_id) <= 0 or len(api_hash) != 32 or any(c not in '0123456789abcdefABCDEF' for c in api_hash):
+              raise SystemExit('Set TELEGRAM_API_ID and TELEGRAM_API_HASH repository secrets from my.telegram.org/apps')
+          config = json.loads(Path('build-system/template_minimal_development_configuration.json').read_text())
+          config.update(bundle_id='org.snoweffect.Telegram', api_id=api_id, api_hash=api_hash,
+                        team_id='SIMULATOR0', app_specific_url_scheme='snoweffect')
+          # SIMULATOR0 is only a placeholder, never an Apple signing identity.
+          config_path = Path(os.environ['RUNNER_TEMP']) / 'snow-simulator-configuration.json'
+          config_path.write_text(json.dumps(config))
+          config_path.chmod(0o600)
+          PY
+          # Make.py's build/test commands lack the generateProject-only switch.
+          # This flag affects provisioning, and keeps all app extensions enabled.
+          printf '\nbuild --//Telegram:disableProvisioningProfiles\n' >> .bazelrc
+          df -h .
+
+      - name: Build the complete Telegram app for Simulator
+        shell: bash
+        run: |
+          python3 build-system/Make/Make.py --cacheDir="$RUNNER_TEMP/telegram-bazel-cache" build \
+            --configurationPath="$RUNNER_TEMP/snow-simulator-configuration.json" \
+            --xcodeManagedCodesigning --buildNumber="$GITHUB_RUN_NUMBER" \
+            --configuration=debug_sim_arm64
+
+      # Capture the app before the test command repoints bazel-bin.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: telegram-simulator-only-NOT-FOR-IPHONE
+          path: bazel-bin/Telegram/Telegram.ipa
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Run SnowEffectTests
+        shell: bash
+        run: |
+          python3 build-system/Make/Make.py --cacheDir="$RUNNER_TEMP/telegram-bazel-cache" test \
+            --configurationPath="$RUNNER_TEMP/snow-simulator-configuration.json" \
+            --xcodeManagedCodesigning --target=//submodules/SnowEffect:SnowEffectTests
+
+      - name: Remove temporary API configuration
+        if: ${{ always() }}
+        shell: bash
+        run: rm -f -- "$RUNNER_TEMP/snow-simulator-configuration.json"

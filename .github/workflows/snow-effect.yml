@@ -1,0 +1,75 @@
+name: Snow Effect — macOS build
+
+on:
+  workflow_dispatch:
+    inputs:
+      configuration:
+        description: Build destination (simulator archives cannot run on iPhone)
+        type: choice
+        options: [debug_sim_arm64, release_arm64]
+        default: debug_sim_arm64
+      run_tests:
+        description: Run SnowEffectTests (requires iPhone 17 / iOS 27.0 Simulator)
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: snow-effect-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # Register a private Apple Silicon Mac with this custom label first.
+    runs-on: [self-hosted, macOS, ARM64, snow-xcode-27.1]
+    timeout-minutes: 180
+    env:
+      TELEGRAM_CONFIGURATION_PATH: ${{ vars.TELEGRAM_CONFIGURATION_PATH }}
+      TELEGRAM_CODESIGNING_PATH: ${{ vars.TELEGRAM_CODESIGNING_PATH }}
+      BUILD_CONFIGURATION: ${{ inputs.configuration }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Check the configured Mac
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "$TELEGRAM_CONFIGURATION_PATH"
+          test -d "$TELEGRAM_CODESIGNING_PATH/profiles"
+          python3 - <<'PY'
+          import json, platform, subprocess
+          versions = json.load(open('versions.json'))
+          actual = subprocess.check_output(['xcodebuild', '-version'], text=True).splitlines()[0]
+          assert actual == 'Xcode ' + versions['xcode'], (actual, versions['xcode'])
+          assert platform.mac_ver()[0].split('.')[0] == versions['macos'].split('.')[0]
+          PY
+
+      - name: Build the complete app
+        shell: bash
+        run: |
+          python3 build-system/Make/Make.py --cacheDir="$HOME/telegram-bazel-cache" build \
+            --configurationPath="$TELEGRAM_CONFIGURATION_PATH" \
+            --codesigningInformationPath="$TELEGRAM_CODESIGNING_PATH" \
+            --buildNumber="$GITHUB_RUN_NUMBER" --configuration="$BUILD_CONFIGURATION"
+
+      # Capture the app before the test command repoints bazel-bin.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: telegram-snow-${{ inputs.configuration }}
+          path: bazel-bin/Telegram/Telegram.ipa
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Test SnowEffect
+        if: ${{ inputs.run_tests }}
+        shell: bash
+        run: |
+          python3 build-system/Make/Make.py --cacheDir="$HOME/telegram-bazel-cache" test \
+            --configurationPath="$TELEGRAM_CONFIGURATION_PATH" \
+            --codesigningInformationPath="$TELEGRAM_CODESIGNING_PATH" \
+            --target=//submodules/SnowEffect:SnowEffectTests

@@ -1,4 +1,5 @@
 import Foundation
+import SnowEffect
 import UIKit
 import Postbox
 import SwiftSignalKit
@@ -244,6 +245,7 @@ struct ScrolledToMessageId: Equatable {
 }
 
 public final class ChatControllerImpl: TelegramBaseController, ChatController, GalleryHiddenMediaTarget, UIDropInteractionDelegate {    
+    private var snowEffectView: SnowEffectView?
     var validLayout: ContainerViewLayout?
     
     public weak var parentController: ViewController?
@@ -7031,6 +7033,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 
                 let isFirstTime = !strongSelf.didSetPresentationData
                 strongSelf.presentationData = presentationData
+                strongSelf.snowEffectView?.isDark = presentationData.theme.overallDarkAppearance
                 strongSelf.didSetPresentationData = true
                 
                 let previousChatTheme = currentChatTheme.swap((chatTheme, useDarkAppearance))
@@ -7984,6 +7987,15 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
 
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+
+        if self.snowEffectView == nil {
+            let snowEffectView = SnowEffectView(frame: self.displayNode.view.bounds)
+            snowEffectView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            self.displayNode.view.addSubview(snowEffectView)
+            self.snowEffectView = snowEffectView
+        }
+        self.snowEffectView?.isDark = self.presentationData.theme.overallDarkAppearance
+        self.snowEffectView?.isEffectVisible = true
         self.forwardSideListAppearance(.didAppear, animated: animated)
         
         self.didAppear = true
@@ -8436,6 +8448,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     
     override public func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        self.snowEffectView?.isEffectVisible = false
         self.forwardSideListAppearance(.willDisappear, animated: animated)
 
         self.walletTransferAnimationsVisible = false

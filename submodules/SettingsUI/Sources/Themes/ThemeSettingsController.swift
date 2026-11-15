@@ -37,6 +37,7 @@ private final class ThemeSettingsControllerArguments {
     let openAutoNightTheme: () -> Void
     let openTextSize: () -> Void
     let openBubbleSettings: () -> Void
+    let openSnowEffectSettings: () -> Void
     let openPowerSavingSettings: () -> Void
     let openStickersAndEmoji: () -> Void
     let toggleSendWithCmdEnter: (Bool) -> Void
@@ -59,6 +60,7 @@ private final class ThemeSettingsControllerArguments {
         openAutoNightTheme: @escaping () -> Void,
         openTextSize: @escaping () -> Void,
         openBubbleSettings: @escaping () -> Void,
+        openSnowEffectSettings: @escaping () -> Void,
         openPowerSavingSettings: @escaping () -> Void,
         openStickersAndEmoji: @escaping () -> Void,
         toggleSendWithCmdEnter: @escaping (Bool) -> Void,
@@ -80,6 +82,7 @@ private final class ThemeSettingsControllerArguments {
         self.openAutoNightTheme = openAutoNightTheme
         self.openTextSize = openTextSize
         self.openBubbleSettings = openBubbleSettings
+        self.openSnowEffectSettings = openSnowEffectSettings
         self.openPowerSavingSettings = openPowerSavingSettings
         self.openStickersAndEmoji = openStickersAndEmoji
         self.toggleSendWithCmdEnter = toggleSendWithCmdEnter
@@ -98,6 +101,7 @@ private enum ThemeSettingsControllerSection: Int32 {
     case icon
     case powerSaving
     case other
+    case snowEffect
 }
 
 public enum ThemeSettingsEntryTag: ItemListItemTag {
@@ -137,6 +141,7 @@ private enum ThemeSettingsControllerEntry: ItemListNodeEntry {
     case bubbleSettings(PresentationTheme, String, String)
     case iconHeader(PresentationTheme, String)
     case iconItem(PresentationTheme, PresentationStrings, [PresentationAppIcon], Bool, String?)
+    case snowEffect
     case powerSaving
     case stickersAndEmoji
     case otherHeader(PresentationTheme, String)
@@ -154,6 +159,8 @@ private enum ThemeSettingsControllerEntry: ItemListNodeEntry {
                 return ThemeSettingsControllerSection.message.rawValue
             case .iconHeader, .iconItem:
                 return ThemeSettingsControllerSection.icon.rawValue
+            case .snowEffect:
+                return ThemeSettingsControllerSection.snowEffect.rawValue
             case .powerSaving, .stickersAndEmoji:
                 return ThemeSettingsControllerSection.message.rawValue
             case .otherHeader, .sendWithCmdEnter, .showNextMediaOnTap, .showNextMediaOnTapInfo:
@@ -185,6 +192,8 @@ private enum ThemeSettingsControllerEntry: ItemListNodeEntry {
             return 9
         case .bubbleSettings:
             return 10
+        case .snowEffect:
+            return 19
         case .powerSaving:
             return 11
         case .stickersAndEmoji:
@@ -280,6 +289,12 @@ private enum ThemeSettingsControllerEntry: ItemListNodeEntry {
                 }
             case let .iconItem(lhsTheme, lhsStrings, lhsIcons, lhsIsPremium, lhsValue):
                 if case let .iconItem(rhsTheme, rhsStrings, rhsIcons, rhsIsPremium, rhsValue) = rhs, lhsTheme === rhsTheme, lhsStrings === rhsStrings, lhsIcons == rhsIcons, lhsIsPremium == rhsIsPremium, lhsValue == rhsValue {
+                    return true
+                } else {
+                    return false
+                }
+            case .snowEffect:
+                if case .snowEffect = rhs {
                     return true
                 } else {
                     return false
@@ -390,6 +405,10 @@ private enum ThemeSettingsControllerEntry: ItemListNodeEntry {
                 return ThemeSettingsAppIconItem(theme: theme, strings: strings, systemStyle: .glass, sectionId: self.section, icons: icons, isPremium: isPremium, currentIconName: value, updated: { icon in
                     arguments.selectAppIcon(icon)
                 }, tag: ThemeSettingsEntryTag.icon)
+            case .snowEffect:
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: SnowEffectStrings(languageCode: presentationData.strings.baseLanguageCode).title, label: "", sectionId: self.section, style: .blocks, action: {
+                    arguments.openSnowEffectSettings()
+                })
             case .powerSaving:
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: nil, title: presentationData.strings.AppearanceSettings_Animations, label: "", labelStyle: .text, sectionId: self.section, style: .blocks, disclosureStyle: .arrow, action: {
                     arguments.openPowerSavingSettings()
@@ -517,6 +536,7 @@ private func themeSettingsControllerEntries(
     }
     entries.append(.showNextMediaOnTap(presentationData.theme, strings.Appearance_ShowNextMediaOnTap, mediaSettings.showNextMediaOnTap))
     entries.append(.showNextMediaOnTapInfo(presentationData.theme, strings.Appearance_ShowNextMediaOnTapInfo))
+    entries.append(.snowEffect)
     
     return entries
 }
@@ -634,6 +654,8 @@ public func themeSettingsController(context: AccountContext, focusOnItemTag: The
             let settings = view.entries[ApplicationSpecificSharedDataKeys.presentationThemeSettings]?.get(PresentationThemeSettings.self) ?? PresentationThemeSettings.defaultSettings
             pushControllerImpl?(BubbleSettingsController(context: context, presentationThemeSettings: settings))
         })
+    }, openSnowEffectSettings: {
+        pushControllerImpl?(snowEffectSettingsController(context: context))
     }, openPowerSavingSettings: {
         pushControllerImpl?(energySavingSettingsScreen(context: context))
     }, openStickersAndEmoji: {
