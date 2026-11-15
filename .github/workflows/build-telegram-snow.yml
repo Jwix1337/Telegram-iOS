@@ -76,7 +76,8 @@ jobs:
 
       # Cache downloaded dependencies and the checksum-verified Bazel executable,
       # never private configuration, credentials, provisioning or compiled apps.
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        id: dependencies
         with:
           path: |
             ~/.cache/telegram-snow-repositories
@@ -84,6 +85,7 @@ jobs:
           key: telegram-snow-downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('versions.json', 'MODULE.bazel', 'MODULE.bazel.lock', '.gitmodules') }}
 
       - name: Configure the pinned toolchain and Telegram
+        id: configure
         shell: bash
         env:
           TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
@@ -122,3 +124,12 @@ jobs:
         if: ${{ always() }}
         shell: bash
         run: rm -f -- "$RUNNER_TEMP/telegram-snow-configuration.json"
+
+      - name: Save verified downloads even after a compile failure
+        if: ${{ always() && steps.configure.outcome == 'success' && steps.dependencies.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cache/telegram-snow-repositories
+            build-input/bazel-9.2.0-darwin-arm64
+          key: ${{ steps.dependencies.outputs.cache-primary-key }}

@@ -14,6 +14,33 @@ SPEC.loader.exec_module(build)
 
 
 class SideStoreArtifactTests(unittest.TestCase):
+    def profile_patch_fixture(self, directory):
+        rules = Path(directory)
+        target = rules / "apple/internal/ios_rules.bzl"
+        target.parent.mkdir(parents=True)
+        source = build.ROOT / "build-system/bazel-rules/rules_apple/apple/internal/ios_rules.bzl"
+        if not source.is_file():
+            self.skipTest("Initialize the pinned rules_apple submodule for patch tests")
+        target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8", newline="\n")
+        build.run("git", "init", str(rules))
+        return rules, target, build.ROOT / "build-system/bazel-patches/rules_apple_unsigned_profiles.patch"
+
+    def test_unsigned_profile_patch_applies_to_pinned_rules_and_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            rules, target, patch_path = self.profile_patch_fixture(directory)
+            self.assertTrue(build.apply_unsigned_profile_patch(rules, patch_path))
+            patched = target.read_text(encoding="utf-8")
+            self.assertEqual(patched.count('"disable_legacy_signing" not in platform_prerequisites.features'), 2)
+            self.assertFalse(build.apply_unsigned_profile_patch(rules, patch_path))
+            self.assertEqual(target.read_text(encoding="utf-8"), patched)
+
+    def test_unsigned_profile_patch_refuses_an_incompatible_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            rules, target, patch_path = self.profile_patch_fixture(directory)
+            target.write_text("def incompatible():\n    pass\n", encoding="utf-8", newline="\n")
+            with self.assertRaisesRegex(ValueError, "no longer applies"):
+                build.apply_unsigned_profile_patch(rules, patch_path)
+
     def test_own_credentials_always_take_priority_over_the_sample(self):
         for mode in ("auto", "own"):
             with self.subTest(mode=mode):

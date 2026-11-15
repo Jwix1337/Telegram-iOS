@@ -18,6 +18,8 @@
 
 Без чужих профилей/сертификатов используются штатные flags закреплённого `rules_apple`: `--//Telegram:disableProvisioningProfiles` и `--features=disable_legacy_signing`. Одного первого флага недостаточно: device build иначе потребует provisioning profile. Это отключение подписи **на стадии сборки**, не обход защиты iOS. После компиляции Apple `codesign --sign -` создаёт локальные hash-подписи для сохранения entitlement metadata. Они **не позволяют установить приложение напрямую**. Сертификат и настоящий provisioning profile создаст SideStore с вашим Apple ID.
 
+В закреплённой ревизии упаковщик отдельно требовал embedded profile даже при отключённой подписи. Узкий `build-system/bazel-patches/rules_apple_unsigned_profiles.patch` устраняет это требование только при `disable_legacy_signing` для iOS application/extension. Конфигуратор применяет patch идемпотентно и отказывает при несовместимой ревизии. Обычный режим подписанной сборки сохраняет требование профилей. Проверки подписи iOS на устройстве не меняются.
+
 Bundle ID по умолчанию: `org.snoweffect.TelegramSnow`, URL scheme `telegram-snow`, display name `Telegram Snow`. Этот ID отличается от официального Telegram; предполагается параллельная установка и отдельный вход в аккаунт. Сессию официального Telegram сборка не читает и не копирует. Сохраняйте ID, Apple ID и Team при обновлениях.
 
 Упаковщик проверяет наличие реального executable, arm64 и платформу iPhoneOS (одного arm64 недостаточно: Simulator тоже arm64), Info.plist, отсутствие DRM, framework binaries и префиксы ID расширений. Embedded frameworks сохраняются и подписываются изнутри наружу. Итог проверяется `codesign --verify --deep --strict` перед публикацией artifact.
@@ -71,7 +73,7 @@ git push -u origin telegram-snow
 ## Проверено и не проверено
 
 - SnowEffect не переписывался: Core Animation, сохранение настроек, сезонность, остановка в фоне/Reduce Motion, адаптация Low Power Mode сохранены. Его зависимости присутствуют в ChatListUI/SettingsUI/TelegramUI.
-- Ранее проверен синтаксис 8 Swift-файлов. Python-правила упаковки и выбора API прошли **12 unit tests** на Windows. Они проверяют защиту путей, device/Simulator различие, executable, entitlement metadata, приоритет собственных ключей и целостность штатного тестового конфига; они не имитируют сборку Telegram.
+- Ранее проверен синтаксис 8 Swift-файлов. Python-правила упаковки и выбора API прошли **14 unit tests** на Windows. Они проверяют защиту путей, device/Simulator различие, executable, entitlement metadata, приоритет собственных ключей, целостность штатного тестового конфига и идемпотентность unsigned patch; они не имитируют сборку Telegram.
 - Статически проверяются YAML workflow, его пути/команды и Python. Patch применяется к закреплённой базе с проверкой совпадения изменённых файлов.
 - **Не выполнены:** GitHub device build, Apple codesign-команды на Mac, реальная переподпись SideStore, установка/запуск на iPhone, XCTest, анимационные кадры, Instruments и регрессия функций Telegram.
 - Push/APNs, VoIP в фоне, входящие звонки, Siri, iCloud, universal links, покупки Premium и работа всех extensions с бесплатной подписью не гарантируются. App Groups должны реально разрешаться после SideStore: иначе Telegram может не запуститься. Ограничения не устраняются обходом защит iOS.

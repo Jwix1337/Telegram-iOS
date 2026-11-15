@@ -58,6 +58,21 @@ def api_credentials(api_id, api_hash, mode="auto", root=ROOT):
     return api_id, api_hash, using_test_api
 
 
+def apply_unsigned_profile_patch(rules_root, patch_path):
+    """Allow profile-less packaging only when legacy signing is explicitly off.
+
+    The pinned rules have a separate profile-embedding partial. Its default
+    signed behavior is retained; SideStore supplies the final device signature.
+    """
+    command = ["git", "-C", str(rules_root), "-c", "core.autocrlf=false", "apply"]
+    if subprocess.run(command + ["--reverse", "--check", str(patch_path)], capture_output=True).returncode == 0:
+        return False
+    check = subprocess.run(command + ["--check", str(patch_path)], capture_output=True)
+    require(check.returncode == 0, "Pinned rules_apple unsigned packaging patch no longer applies")
+    subprocess.run(command + [str(patch_path)], check=True, capture_output=True)
+    return True
+
+
 def configure():
     require(sys.platform == "darwin" and platform.machine() == "arm64", "Requires an Apple Silicon macOS runner")
     versions = json.loads((ROOT / "versions.json").read_text())
@@ -73,6 +88,8 @@ def configure():
     require((ROOT / "submodules/SnowEffect/Sources/SnowEffectView.swift").is_file(), "SnowEffect sources missing")
     rules = ROOT / "build-system/bazel-rules/rules_apple/apple/internal/codesigning_support.bzl"
     require('"disable_legacy_signing" in features' in rules.read_text(), "The pinned rules_apple signing feature is missing")
+    apply_unsigned_profile_patch(ROOT / "build-system/bazel-rules/rules_apple",
+                                 ROOT / "build-system/bazel-patches/rules_apple_unsigned_profiles.patch")
 
     config = json.loads((ROOT / "build-system/template_minimal_development_configuration.json").read_text())
     config.update(bundle_id=bundle_id, api_id=api_id, api_hash=api_hash,
