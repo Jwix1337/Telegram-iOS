@@ -1,6 +1,6 @@
 # Telegram Snow: GitHub Actions → SideStore → iPhone
 
-Реальные исходники Telegram-iOS со SnowEffect сохранены. Целевой workflow: `.github/workflows/build-telegram-snow.yml`. Фактический результат удалённой сборки отмечается в PROGRESS.md; успешной считается только настоящая сборка и проверка IPA. Локальная iOS-сборка на Windows не запускалась.
+GitHub Actions успешно собрал настоящий `TelegramSnow.ipa` с собственными API credentials: [run #4](https://github.com/Jwix1337/Telegram-iOS/actions/runs/43711859547), исходники `b25229b5b0b2e72040297c2039bf048ed564c5d4`, 15 ноября 2026. Выполнены все 9 962 действия Bazel, проверка и упаковка IPA. Локальная iOS-сборка на Windows не запускалась.
 
 ## Закреплённая база
 
@@ -53,6 +53,8 @@ git push -u origin telegram-snow
 
 ## Где скачать IPA
 
+Готовый [artifact own-api-4](https://github.com/Jwix1337/Telegram-iOS/actions/runs/43711859547/artifacts/14164279465) содержит `TelegramSnow.ipa` (80 939 830 байт). Скачайте ZIP и извлеките IPA; artifact хранится до 22 ноября 2026, 16:57 МСК. SHA256 самой IPA: `1f0acb6b0b5fabe2292b9ce3c3a558fa50e230f86ac1c462a948d2fcdf36b33d`. Версия приложения 13.2 (100004), iOS 15.0+, Bundle ID `org.snoweffect.TelegramSnow`, собственный API, пять embedded frameworks, без extensions.
+
 После **успешного** завершения workflow откройте его страницу → Artifacts → `TelegramSnow-iPhone-SideStore-<тип API>-<номер>`. Скачайте и распакуйте artifact ZIP. Внутри — **TelegramSnow.ipa** для собственных ключей или **TelegramSnow-Test.ipa** для тестового API. Сам artifact ZIP в SideStore не импортируется.
 
 Артефакт появляется только после настоящей компиляции, проверки device binaries и упаковки. Если сборка/упаковка завершилась ошибкой, готовой IPA считать результат нельзя. Другой workflow **Snow Effect — cloud simulator checks** выдаёт Simulator IPA — она для физического iPhone не подходит.
@@ -75,7 +77,8 @@ git push -u origin telegram-snow
 - SnowEffect не переписывался: Core Animation, сохранение настроек, сезонность, остановка в фоне/Reduce Motion, адаптация Low Power Mode сохранены. Его зависимости присутствуют в ChatListUI/SettingsUI/TelegramUI.
 - Ранее проверен синтаксис 8 Swift-файлов. Python-правила упаковки и выбора API прошли **14 unit tests** на Windows. Они проверяют защиту путей, device/Simulator различие, executable, entitlement metadata, приоритет собственных ключей, целостность штатного тестового конфига и идемпотентность unsigned patch; они не имитируют сборку Telegram.
 - Статически проверяются YAML workflow, его пути/команды и Python. Patch применяется к закреплённой базе с проверкой совпадения изменённых файлов.
-- **Не выполнены:** GitHub device build, Apple codesign-команды на Mac, реальная переподпись SideStore, установка/запуск на iPhone, XCTest, анимационные кадры, Instruments и регрессия функций Telegram.
+- **Выполнены:** настоящий GitHub device build, 14 unit tests, упаковка и `codesign --verify --deep --strict` на macOS. Скачанный artifact сверён по GitHub SHA256; локально проверены CRC, Info.plist, Mach-O arm64/iPhoneOS, отсутствие DRM, framework executables и отсутствие extensions.
+- **Не выполнены:** реальная переподпись SideStore, установка/запуск на iPhone, XCTest, анимационные кадры, Instruments и регрессия функций Telegram.
 - Push/APNs, VoIP в фоне, входящие звонки, Siri, iCloud, universal links, покупки Premium и работа всех extensions с бесплатной подписью не гарантируются. App Groups должны реально разрешаться после SideStore: иначе Telegram может не запуститься. Ограничения не устраняются обходом защит iOS.
 
 Если workflow упал, сначала установите класс ошибки: missing secrets → настройка; `Xcode must match` → runner/toolchain; missing module/checksum → dependency/Bazel; Swift diagnostic → исходники; `provisioning_profile` → применён ли unsigned build feature; `No space`/OOM/quota → ресурсы GitHub. Без исправления причины повторную полную сборку не запускайте.
