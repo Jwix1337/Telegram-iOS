@@ -6,6 +6,7 @@ not authorize installation: SideStore must sign with the user's own account.
 """
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -22,6 +23,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
 OFFICIAL_IDS = {"ph.telegra.Telegraph", "org.telegram.Telegram-iOS"}
+UPSTREAM_TEST_CONFIG_SHA256 = "dbff2521b7dc9181e328edcda086a33a9d3cacaa9a3dbcd408fe15230a18f56a"
 
 
 def require(condition, message):
@@ -39,16 +41,32 @@ def run(*args):
     return subprocess.check_output([str(arg) for arg in args], text=True, stderr=subprocess.STDOUT)
 
 
+def api_credentials(api_id, api_hash, mode="auto", root=ROOT):
+    """Prefer the user's keys; upstream's published sample is development-only."""
+    require(mode in ("auto", "own"), "Unknown API credential mode")
+    api_id, api_hash = api_id.strip(), api_hash.strip()
+    using_test_api = False
+    if not api_id and not api_hash and mode == "auto":
+        sample = (root / "build-system/appstore-configuration.json").read_text(encoding="utf-8")
+        require(hashlib.sha256(sample.encode()).hexdigest() == UPSTREAM_TEST_CONFIG_SHA256,
+                "Upstream test configuration changed; supply your own API secrets")
+        upstream = json.loads(sample)
+        api_id, api_hash = str(upstream["api_id"]), str(upstream["api_hash"])
+        using_test_api = True
+    require(api_id.isascii() and api_id.isdecimal() and 0 < int(api_id) <= 2147483647, "Set the TELEGRAM_API_ID repository secret")
+    require(bool(re.fullmatch(r"[0-9a-fA-F]{32}", api_hash)), "Set the TELEGRAM_API_HASH repository secret")
+    return api_id, api_hash, using_test_api
+
+
 def configure():
     require(sys.platform == "darwin" and platform.machine() == "arm64", "Requires an Apple Silicon macOS runner")
     versions = json.loads((ROOT / "versions.json").read_text())
     require(run("xcodebuild", "-version").splitlines()[0] == "Xcode " + versions["xcode"], "Xcode must match versions.json")
     require(platform.mac_ver()[0].split(".")[0] == versions["macos"].split(".")[0], "macOS must match versions.json")
     bundle_id = bundle_identifier(os.environ["SNOW_BUNDLE_ID"])
-    api_id = os.environ.get("TELEGRAM_API_ID", "").strip()
-    api_hash = os.environ.get("TELEGRAM_API_HASH", "").strip()
-    require(api_id.isascii() and api_id.isdecimal() and 0 < int(api_id) <= 2147483647, "Set the TELEGRAM_API_ID repository secret")
-    require(bool(re.fullmatch(r"[0-9a-fA-F]{32}", api_hash)), "Set the TELEGRAM_API_HASH repository secret")
+    api_id, api_hash, using_test_api = api_credentials(
+        os.environ.get("TELEGRAM_API_ID", ""), os.environ.get("TELEGRAM_API_HASH", ""),
+        os.environ.get("SNOW_API_MODE", "auto"))
 
     for module in ("ChatListUI", "SettingsUI", "TelegramUI"):
         require("//submodules/SnowEffect:SnowEffect" in (ROOT / "submodules" / module / "BUILD").read_text(), "SnowEffect dependency missing: " + module)
@@ -83,6 +101,14 @@ def configure():
     require(run(bazel, "--version").strip() == "bazel " + versions["bazel"].split(":")[0], "Bazel version mismatch")
     with Path(os.environ["GITHUB_ENV"]).open("a") as env:
         env.write(f"SNOW_BAZEL={bazel}\n")
+        env.write(f"SNOW_USING_TEST_API={'true' if using_test_api else 'false'}\n")
+        env.write(f"SNOW_CREDENTIAL_SOURCE={'upstream-test' if using_test_api else 'own-api'}\n")
+        env.write(f"SNOW_IPA_NAME={'TelegramSnow-Test.ipa' if using_test_api else 'TelegramSnow.ipa'}\n")
+    if using_test_api:
+        print("::warning::Using upstream's published sample API for development testing only. Login may fail with API_ID_PUBLISHED_FLOOD. Supply your own keys before end-user distribution.")
+        if os.environ.get("GITHUB_STEP_SUMMARY"):
+            with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
+                summary.write("Testing build with the official upstream sample API. This is not an end-user release; authentication may be server-limited. Add your own API secrets for the final build.\n")
     print("Configured device build; SnowEffect included; no certificate or provisioning profile imported")
 
 
@@ -177,7 +203,9 @@ def package(input_path, output_path, bundle_id, include_extensions=False):
                 check_device_binary(dylib)
                 run("/usr/bin/codesign", "--force", "--sign", "-", "--timestamp=none", dylib)
 
-        info["CFBundleDisplayName"] = "Telegram Snow"
+        using_test_api = os.environ.get("SNOW_USING_TEST_API", "false") == "true"
+        info["CFBundleDisplayName"] = "Telegram Snow Test" if using_test_api else "Telegram Snow"
+        info["SnowEffectTestingAPI"] = using_test_api
         with (app / "Info.plist").open("wb") as destination:
             plistlib.dump(info, destination)
         for profile in app.rglob("embedded.mobileprovision"):

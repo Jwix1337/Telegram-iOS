@@ -12,6 +12,8 @@
 
 ## Что именно собирается
 
+Режим `api_mode=auto` сначала использует ваши repository secrets. Если оба отсутствуют, разрешена **только разработческая тестовая сборка** с опубликованным API из исходного `build-system/appstore-configuration.json`. SHA256 конфигурации проверяется, новые ключи в код не копируются. Это разрешённый [официальной документацией Telegram](https://core.telegram.org/api/obtaining_api_id) сценарий тестирования; API ограничен сервером, возможен `API_ID_PUBLISHED_FLOOD`. Тестовую сборку нельзя распространять как готовый клиент для пользователей. Её artifact содержит `upstream-test`, файл называется `TelegramSnow-Test.ipa`, приложение — `Telegram Snow Test`. Когда получите собственные ключи, добавьте оба secrets; при `api_mode=own` их наличие обязательно. Неверные или частично заполненные secrets автоматически тестовыми не заменяются.
+
 Штатный `build-system/Make/Make.py build --configuration=release_arm64` компилирует настоящий Telegram вместе со SnowEffect и расширениями. Затем `build-system/SnowEffect/sidestore_build.py` проверяет результат и упаковывает его для переподписи. Пустой или подменённый IPA не создаётся.
 
 Без чужих профилей/сертификатов используются штатные flags закреплённого `rules_apple`: `--//Telegram:disableProvisioningProfiles` и `--features=disable_legacy_signing`. Одного первого флага недостаточно: device build иначе потребует provisioning profile. Это отключение подписи **на стадии сборки**, не обход защиты iOS. После компиляции Apple `codesign --sign -` создаёт локальные hash-подписи для сохранения entitlement metadata. Они **не позволяют установить приложение напрямую**. Сертификат и настоящий provisioning profile создаст SideStore с вашим Apple ID.
@@ -42,14 +44,14 @@ git push -u origin telegram-snow
 ```
 
 3. Сделайте `telegram-snow` default branch своего fork, чтобы новый `workflow_dispatch` появился в Actions. Включите Actions для fork, если GitHub предлагает это сделать. Рекурсивные зависимости на Windows скачивать для сборки не нужно: это делает macOS runner.
-4. Получите **свои** Telegram `api_id` и `api_hash` на [my.telegram.org/apps](https://my.telegram.org/apps). В fork: Settings → Secrets and variables → Actions → New repository secret. Создайте `TELEGRAM_API_ID` и `TELEGRAM_API_HASH`. Apple ID, пароль Apple и сертификаты в GitHub не нужны. Ключи не коммитятся в исходники.
+4. Для итогового клиента получите **свои** Telegram `api_id` и `api_hash` на [my.telegram.org/apps](https://my.telegram.org/apps). В fork: Settings → Secrets and variables → Actions → New repository secret. Создайте `TELEGRAM_API_ID` и `TELEGRAM_API_HASH`. Если Telegram пока не выдаёт ключи, в `auto` можно проверить настоящую сборку на штатном тестовом API с указанными выше ограничениями. Apple ID, пароль Apple и сертификаты в GitHub не нужны. Ключи не коммитятся в исходники.
 5. Actions → **Build Telegram Snow for SideStore** → Run workflow. Оставьте отдельный bundle ID, выберите `include_extensions` и runner. `xcode-27-xlarge` — опциональный более мощный runner, доступ/оплата зависят от GitHub; автоматически он не выбирается.
 
 Кэшируются только скачанные dependency archives и проверяемый Bazel. Кэш compiled binaries и API-конфигурации не сохраняется. Наличие кэша не заменяет компиляцию. Версии toolchain не обходятся флагами override.
 
 ## Где скачать IPA
 
-После **успешного** завершения workflow откройте его страницу → Artifacts → `TelegramSnow-iPhone-SideStore-<номер>`. Скачайте и распакуйте artifact ZIP. Внутри — **TelegramSnow.ipa**. Сам artifact ZIP в SideStore не импортируется.
+После **успешного** завершения workflow откройте его страницу → Artifacts → `TelegramSnow-iPhone-SideStore-<тип API>-<номер>`. Скачайте и распакуйте artifact ZIP. Внутри — **TelegramSnow.ipa** для собственных ключей или **TelegramSnow-Test.ipa** для тестового API. Сам artifact ZIP в SideStore не импортируется.
 
 Артефакт появляется только после настоящей компиляции, проверки device binaries и упаковки. Если сборка/упаковка завершилась ошибкой, готовой IPA считать результат нельзя. Другой workflow **Snow Effect — cloud simulator checks** выдаёт Simulator IPA — она для физического iPhone не подходит.
 
@@ -69,7 +71,7 @@ git push -u origin telegram-snow
 ## Проверено и не проверено
 
 - SnowEffect не переписывался: Core Animation, сохранение настроек, сезонность, остановка в фоне/Reduce Motion, адаптация Low Power Mode сохранены. Его зависимости присутствуют в ChatListUI/SettingsUI/TelegramUI.
-- Ранее проверен синтаксис 8 Swift-файлов. Новые Python-правила упаковки прошли **8 unit tests** на Windows. Они проверяют защиту путей, device/Simulator различие, executable и entitlement metadata; они не имитируют сборку Telegram.
+- Ранее проверен синтаксис 8 Swift-файлов. Python-правила упаковки и выбора API прошли **12 unit tests** на Windows. Они проверяют защиту путей, device/Simulator различие, executable, entitlement metadata, приоритет собственных ключей и целостность штатного тестового конфига; они не имитируют сборку Telegram.
 - Статически проверяются YAML workflow, его пути/команды и Python. Patch применяется к закреплённой базе с проверкой совпадения изменённых файлов.
 - **Не выполнены:** GitHub device build, Apple codesign-команды на Mac, реальная переподпись SideStore, установка/запуск на iPhone, XCTest, анимационные кадры, Instruments и регрессия функций Telegram.
 - Push/APNs, VoIP в фоне, входящие звонки, Siri, iCloud, universal links, покупки Premium и работа всех extensions с бесплатной подписью не гарантируются. App Groups должны реально разрешаться после SideStore: иначе Telegram может не запуститься. Ограничения не устраняются обходом защит iOS.

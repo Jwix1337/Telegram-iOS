@@ -14,6 +14,30 @@ SPEC.loader.exec_module(build)
 
 
 class SideStoreArtifactTests(unittest.TestCase):
+    def test_own_credentials_always_take_priority_over_the_sample(self):
+        for mode in ("auto", "own"):
+            with self.subTest(mode=mode):
+                self.assertEqual(build.api_credentials("1234567", "a" * 32, mode), ("1234567", "a" * 32, False))
+
+    def test_official_sample_is_explicitly_marked_for_testing(self):
+        api_id, api_hash, testing = build.api_credentials("", "", "auto")
+        self.assertEqual(api_id, "8")
+        self.assertEqual(len(api_hash), 32)
+        self.assertTrue(testing)
+
+    def test_missing_partial_or_invalid_own_credentials_are_not_silently_replaced(self):
+        for api_id, api_hash, mode in (("", "", "own"), ("123", "", "auto"), ("", "a" * 32, "auto"), ("123", "wrong", "auto"), ("123", "a" * 32, "unknown")):
+            with self.subTest(mode=mode, has_id=bool(api_id), has_hash=bool(api_hash)), self.assertRaises(ValueError):
+                build.api_credentials(api_id, api_hash, mode)
+
+    def test_modified_upstream_configuration_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "build-system").mkdir()
+            (root / "build-system/appstore-configuration.json").write_text("{}")
+            with self.assertRaisesRegex(ValueError, "configuration changed"):
+                build.api_credentials("", "", "auto", root)
+
     def test_bundle_id_is_separate_and_cannot_inject_build_configuration(self):
         self.assertEqual(build.bundle_identifier("org.snoweffect.TelegramSnow"), "org.snoweffect.TelegramSnow")
         for value in ("ph.telegra.Telegraph", "org.telegram.Telegram-iOS", "no-dot", "a.b\n", 'a.b"', "a/b.c"):
