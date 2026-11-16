@@ -15,13 +15,13 @@ def main():
         tests = package / "Tests/SnowEffectTests"
         sources.mkdir(parents=True)
         tests.mkdir(parents=True)
-        for name in ["SnowEffectSettings.swift", "SnowHatConfiguration.swift", "WinterEventTransport.swift"]:
+        for name in ["SnowEffectSettings.swift", "SnowHatConfiguration.swift", "WinterEventTransport.swift", "WinterSyncClient.swift"]:
             shutil.copyfile(module / "Sources" / name, sources / name)
-        for name in ["SnowHatTests.swift", "WinterEventTests.swift"]:
+        for name in ["SnowHatTests.swift", "WinterEventTests.swift", "WinterSyncClientTests.swift"]:
             shutil.copyfile(module / "Tests" / name, tests / name)
         (package / "Package.swift").write_text('''// swift-tools-version: 5.9
 import PackageDescription
-let package = Package(name: "WinterModelChecks", targets: [
+let package = Package(name: "WinterModelChecks", platforms: [.macOS(.v12)], targets: [
     .target(name: "SnowEffect"),
     .testTarget(name: "SnowEffectTests", dependencies: ["SnowEffect"])
 ])

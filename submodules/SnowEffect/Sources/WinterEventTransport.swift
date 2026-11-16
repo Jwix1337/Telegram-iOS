@@ -106,6 +106,16 @@ public struct WinterSnowmanSession: Codable, Equatable {
     public var nextClock: Int64 { min(1_000_000_000, (self.registers.values.map(\.clock).max() ?? 0) + 1) }
     public var isBuilt: Bool { SnowmanPart.assembly.allSatisfy { self.contains($0) } }
 
+    static func serverSnapshot(id: String, inviter: Int64, invitee: Int64, createdAt: Int64,
+                               accepted: Bool, completed: Bool, parts: [SnowmanPart: Int], version: Int64) -> WinterSnowmanSession {
+        var result = WinterSnowmanSession(sessionID: id, inviterID: inviter, inviteeID: invitee, createdAt: createdAt)
+        result.accepted = accepted; result.completed = completed
+        for (part, value) in parts {
+            result.registers[part] = Register(value: value, clock: version, authorID: inviter, eventID: id)
+        }
+        return result
+    }
+
     fileprivate func matches(_ event: WinterEvent) -> Bool {
         return (event.senderID == self.inviterID && event.recipientID == self.inviteeID)
             || (event.senderID == self.inviteeID && event.recipientID == self.inviterID)
@@ -123,10 +133,19 @@ public struct WinterSnowmanSession: Codable, Equatable {
     }
 }
 
+/// A server route is exclusive: failures never silently fall back to Telegram messages.
+public protocol WinterServerTransport: AnyObject {
+    func owns(accountID: Int64, peerID: Int64) -> Bool
+    func record(_ event: WinterEvent, accountID: Int64) -> Bool
+    func session(accountID: Int64, peerID: Int64) -> WinterSnowmanSession?
+    func snowballs(accountID: Int64, peerID: Int64, consume: Bool) -> [WinterEvent]
+}
+
 /// One local transport boundary for hats and all winter actions. It does not send messages.
 /// The Telegram bridge supplies authenticated authors and confirms every outgoing message.
 public final class WinterEventTransport: NSObject {
     public static let shared = WinterEventTransport()
+    public static weak var serverTransport: WinterServerTransport?
     public static let didChange = Notification.Name("WinterEventTransportDidChange")
     public static let messagePrefix = "Telegram Snow Winter v1\n"
     public static let maximumMessageBytes = 4096
@@ -185,11 +204,15 @@ public final class WinterEventTransport: NSObject {
         guard event.isValid, event.senderID == accountID, event.createdAt <= self.milliseconds + 300000,
               event.type != .snowball || event.createdAt >= self.milliseconds - 120000,
               event.hat == nil || event.hat!.modifiedAt <= self.milliseconds + 300000 else { return false }
+        if let server = Self.serverTransport, server.owns(accountID: accountID, peerID: event.recipientID) {
+            return server.record(event, accountID: accountID)
+        }
         return self.record(event, accountID: accountID, incoming: false, messageTimestamp: nil)
     }
 
     @discardableResult
     public func receive(messageText: String, authorID: Int64, accountID: Int64, messageTimestamp: Int32) -> Bool {
+        guard Self.serverTransport?.owns(accountID: accountID, peerID: authorID) != true else { return false }
         // Compatibility adapter: already released visible hat messages remain readable.
         if messageText.hasPrefix(SnowHatConfiguration.messagePrefix) {
             return self.hatStore.accept(messageText: messageText, authorID: authorID, accountID: accountID, messageTimestamp: messageTimestamp)
@@ -209,6 +232,9 @@ public final class WinterEventTransport: NSObject {
     }
 
     public func session(accountID: Int64, peerID: Int64) -> WinterSnowmanSession? {
+        if let server = Self.serverTransport, server.owns(accountID: accountID, peerID: peerID) {
+            return server.session(accountID: accountID, peerID: peerID)
+        }
         guard accountID > 0, peerID > 0 else { return nil }
         self.lock.lock()
         defer { self.lock.unlock() }
@@ -225,6 +251,9 @@ public final class WinterEventTransport: NSObject {
 
     /// Consuming is persisted; history scrolling never replays an already seen snowball.
     public func pendingSnowballs(accountID: Int64, peerID: Int64, consume: Bool = true) -> [WinterEvent] {
+        if let server = Self.serverTransport, server.owns(accountID: accountID, peerID: peerID) {
+            return server.snowballs(accountID: accountID, peerID: peerID, consume: consume)
+        }
         guard accountID > 0, peerID > 0 else { return [] }
         self.lock.lock()
         defer { self.lock.unlock() }

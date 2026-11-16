@@ -23,9 +23,12 @@ final class WinterEventAccountBridge {
     init(context: AccountContext) {
         self.context = context
         let accountID = context.account.peerId.toInt64()
+        WinterEventTransport.serverTransport = WinterSyncHub.shared
+        WinterSyncHub.shared.start(accountID: accountID)
         self.incoming = context.account.stateManager.incomingMessages.start(next: { messages in
             for message in messages {
-                guard message.id.namespace == Namespaces.Message.Cloud,
+                guard message.text.hasPrefix(WinterEventTransport.messagePrefix) || message.text.hasPrefix(SnowHatConfiguration.messagePrefix),
+                      message.id.namespace == Namespaces.Message.Cloud,
                       message.id.peerId.namespace == Namespaces.Peer.CloudUser,
                       message.forwardInfo == nil,
                       let author = message.author, author.id == message.id.peerId else { continue }
@@ -37,7 +40,12 @@ final class WinterEventAccountBridge {
             guard (notification.userInfo?["accountID"] as? Int64) == accountID else { return }
             self?.pump()
         })
-        self.observers.append(center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in self?.pump() })
+        self.observers.append(center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            WinterSyncHub.shared.start(accountID: accountID); self?.pump()
+        })
+        self.observers.append(center.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { _ in
+            WinterSyncHub.shared.stop(accountID: accountID)
+        })
         DispatchQueue.main.async { [weak self] in self?.pump() }
     }
 
@@ -45,6 +53,7 @@ final class WinterEventAccountBridge {
 
     func stop() {
         self.stopped = true
+        if let context = self.context { WinterSyncHub.shared.stop(accountID: context.account.peerId.toInt64()) }
         self.retry?.invalidate()
         self.retry = nil
         self.incoming?.dispose()
@@ -58,7 +67,7 @@ final class WinterEventAccountBridge {
         guard !self.stopped, !self.sending, UIApplication.shared.applicationState == .active,
               let context = self.context else { return }
         let accountID = context.account.peerId.toInt64()
-        guard let event = WinterEventTransport.shared.pendingOutgoing(accountID: accountID).first,
+        guard let event = WinterEventTransport.shared.pendingOutgoing(accountID: accountID).first(where: { !WinterSyncHub.shared.owns(accountID: accountID, peerID: $0.recipientID) }),
               let text = WinterEventTransport.shared.messageText(event) else { return }
         self.sending = true
         self.retry?.invalidate()
@@ -89,6 +98,7 @@ final class WinterChatInteractions: NSObject {
     private let snowball = WinterSnowballView(frame: .zero)
     private var visible = false
     private weak var snowmanHost: WinterSnowmanHostController?
+    private var pendingServerOpen: String?
     private var snowmanSessionID: String?
     private lazy var button = UIBarButtonItem(image: UIImage(systemName: "snowflake"), style: .plain, target: self, action: #selector(self.showMenu))
     private var accountID: Int64 { self.context.account.peerId.toInt64() }
@@ -161,6 +171,9 @@ final class WinterChatInteractions: NSObject {
         if let session = WinterEventTransport.shared.session(accountID: self.accountID, peerID: self.peerID.toInt64()) {
             self.snowmanSessionID = session.sessionID
             self.snowmanHost?.update(session: session)
+            if self.pendingServerOpen == session.sessionID, self.canPresent {
+                self.pendingServerOpen = nil; self.openSnowman(session)
+            }
         }
         self.installButton()
         guard self.canPresent, let host = self.host else {
@@ -212,13 +225,20 @@ final class WinterChatInteractions: NSObject {
                 }))
             }
         }
+        items.append(ActionSheetButtonItem(title: "Winter Sync · HTTPS / WebSocket", color: .accent, action: { [weak self, weak sheet] in
+            sheet?.dismissAnimated()
+            guard let self else { return }
+            let settings = WinterSyncSetupViewController(accountID: self.accountID, peerID: self.peerID.toInt64())
+            self.host?.present(settings, animated: true)
+        }))
         sheet.setItemGroups([ActionSheetItemGroup(items: items), ActionSheetItemGroup(items: [ActionSheetButtonItem(title: self.text("Отмена", "Cancel"), color: .accent, action: { [weak sheet] in sheet?.dismissAnimated() })])])
         self.host?.present(sheet, in: .window(.root))
     }
 
     private func request(type: WinterEvent.Kind, sessionID: String? = nil, mutation: SnowmanMutation? = nil, openAfter: Bool = false) {
         let title = type.label
-        let body = self.text("В этот чат будет отправлено обычное видимое сообщение с зимним действием. Получатель увидит эффект в совместимом Telegram Snow. Отправить?", "An ordinary visible winter-action message will be sent to this chat. The recipient sees its effect in a compatible Telegram Snow. Send?")
+        let serverMode = WinterSyncHub.shared.owns(accountID: self.accountID, peerID: self.peerID.toInt64())
+        let body = serverMode ? self.text("Передать зимнее действие через подключённую пару Winter Sync? При недоступности сервиса действие останется в очереди. Техническое сообщение Telegram не отправляется.", "Send through your paired Winter Sync service? Offline actions stay queued; no technical Telegram message is sent.") : self.text("В этот чат будет отправлено обычное видимое сообщение с зимним действием. Получатель увидит эффект в совместимом Telegram Snow. Отправить?", "An ordinary visible winter-action message will be sent to this chat. The recipient sees its effect in a compatible Telegram Snow. Send?")
         self.confirm(title: title, body: body) { [weak self] in
             guard let self else { return }
             let settings = SnowEffectPreferences.shared.settings
@@ -232,6 +252,7 @@ final class WinterChatInteractions: NSObject {
             if type == .snowball, self.canPresent {
                 self.snowball.play(incoming: false, seed: self.seed(event))
             }
+            if openAfter && serverMode { self.pendingServerOpen = event.sessionID }
             if openAfter, let session = WinterEventTransport.shared.session(accountID: self.accountID, peerID: self.peerID.toInt64()) {
                 self.openSnowman(session)
             }
@@ -241,7 +262,7 @@ final class WinterChatInteractions: NSObject {
     private func confirm(title: String, body: String, action: @escaping () -> Void) {
         let controller = textAlertController(context: self.context, title: title, text: body, actions: [
             TextAlertAction(type: .genericAction, title: self.text("Отмена", "Cancel"), action: {}),
-            TextAlertAction(type: .defaultAction, title: self.text("Отправить сообщение", "Send Message"), action: action)
+            TextAlertAction(type: .defaultAction, title: self.text("Подтвердить отправку", "Confirm Send"), action: action)
         ])
         if let snowmanHost = self.snowmanHost { snowmanHost.present(controller, in: .window(.root)) }
         else { self.host?.present(controller, in: .window(.root)) }

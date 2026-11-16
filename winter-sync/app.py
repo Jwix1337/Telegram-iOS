@@ -113,12 +113,22 @@ def create_app(db_path=None, admin_key=None, clock=time.time):
         CREATE TABLE IF NOT EXISTS codes(hash TEXT PRIMARY KEY, owner TEXT NOT NULL, expires REAL NOT NULL);
         CREATE TABLE IF NOT EXISTS pairs(id TEXT PRIMARY KEY,a TEXT NOT NULL,b TEXT NOT NULL,ca INTEGER DEFAULT 0,cb INTEGER DEFAULT 0,revoked INTEGER DEFAULT 0);
         CREATE TABLE IF NOT EXISTS hats(owner TEXT PRIMARY KEY,data TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS sessions(id TEXT PRIMARY KEY,pair TEXT NOT NULL,creator TEXT NOT NULL,version INTEGER NOT NULL,data TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS sessions(id TEXT PRIMARY KEY,pair TEXT NOT NULL,creator TEXT NOT NULL,version INTEGER NOT NULL,data TEXT NOT NULL,created_at REAL NOT NULL DEFAULT 0);
         CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT UNIQUE NOT NULL,pair TEXT NOT NULL,owner TEXT NOT NULL,hash TEXT NOT NULL,data TEXT NOT NULL);
         CREATE INDEX IF NOT EXISTS events_pair_seq ON events(pair,seq);
         CREATE TABLE IF NOT EXISTS rates(key TEXT PRIMARY KEY,bucket INTEGER,count INTEGER);
         PRAGMA user_version=1;
         ''')
+        if 'created_at' not in [r[1] for r in c.execute('PRAGMA table_info(sessions)')]:
+            c.execute('ALTER TABLE sessions ADD COLUMN created_at REAL NOT NULL DEFAULT 0')
+        if c.execute('SELECT 1 FROM sessions WHERE created_at=0 LIMIT 1').fetchone():
+            # Recover original invitation time from the existing journal, without JSON1 dependencies.
+            for row in c.execute('SELECT data FROM events'):
+                data = json.loads(row['data'])
+                if data['event']['type'] == 'snowman_invite':
+                    c.execute('UPDATE sessions SET created_at=? WHERE id=? AND created_at=0',
+                              (data['created_at'], data['event']['session_id']))
+            c.execute('UPDATE sessions SET created_at=? WHERE created_at=0', (clock(),))
     app = FastAPI(title='Winter Sync', version='1.0.0', docs_url=None, redoc_url=None, openapi_url=None)
     bearer = HTTPBearer(auto_error=False)
 
@@ -182,6 +192,10 @@ def create_app(db_path=None, admin_key=None, clock=time.time):
             c.execute('INSERT INTO devices(id,token) VALUES(?,?)', (device, digest(token)))
         return {'device_id': device, 'token': token}
 
+    @app.get('/v1/device')
+    def identity(who=Depends(auth)):
+        return {'device_id': who}
+
     @app.post('/v1/devices/{device}/revoke', dependencies=[Depends(admin)])
     def revoke_device(device: str):
         with db() as c:
@@ -231,6 +245,17 @@ def create_app(db_path=None, admin_key=None, clock=time.time):
             c.execute('UPDATE pairs SET revoked=1 WHERE id=?', (pid,))
         return {'revoked': True}
 
+    def wire_event(c, serialized):
+        data = json.loads(serialized)
+        state = data.get('state')
+        if state is not None and ('creator_id' not in state or 'created_at' not in state):
+            session = c.execute('SELECT creator,created_at FROM sessions WHERE id=? AND pair=?',
+                                (state['session_id'], data['event']['pair_id'])).fetchone()
+            if session is None:
+                fail(503, 'session metadata unavailable')
+            state['creator_id'], state['created_at'] = session['creator'], session['created_at']
+        return data
+
     @app.post('/v1/events')
     def publish(body: Event, who=Depends(auth)):
         canonical = body.model_dump_json()
@@ -240,7 +265,7 @@ def create_app(db_path=None, admin_key=None, clock=time.time):
             if prior:
                 if prior['owner'] != who or prior['hash'] != digest(canonical):
                     fail(409, 'event ID reused with different data')
-                return json.loads(prior['data'])
+                return wire_event(c, prior['data'])
             rate(c, 'events:' + who, 60)
             if body.type == 'snowball':
                 rate(c, 'snowball:' + who, 1, 3)
@@ -257,11 +282,11 @@ def create_app(db_path=None, admin_key=None, clock=time.time):
                     if row or body.expected_version != 0:
                         fail(409, 'session exists or invalid initial version')
                     state = {'accepted': False, 'completed': False, 'parts': {}}
-                    creator, version = who, 0
+                    creator, version, created_at = who, 0, clock()
                 else:
                     if not row or row['pair'] != body.pair_id:
                         fail(404, 'session not found')
-                    state, creator, version = json.loads(row['data']), row['creator'], row['version']
+                    state, creator, version, created_at = json.loads(row['data']), row['creator'], row['version'], row['created_at']
                     if version != body.expected_version:
                         fail(409, 'version conflict; refresh state')
                     if body.type == 'snowman_accept':
@@ -281,8 +306,8 @@ def create_app(db_path=None, admin_key=None, clock=time.time):
                                 fail(409, 'snowman incomplete')
                             state['completed'] = True
                 version += 1
-                c.execute('INSERT OR REPLACE INTO sessions VALUES(?,?,?,?,?)', (body.session_id, body.pair_id, creator, version, json.dumps(state)))
-                snapshot = {'session_id': body.session_id, 'version': version, **state}
+                c.execute('INSERT OR REPLACE INTO sessions VALUES(?,?,?,?,?,?)', (body.session_id, body.pair_id, creator, version, json.dumps(state), created_at))
+                snapshot = {'session_id': body.session_id, 'version': version, 'creator_id': creator, 'created_at': created_at, **state}
             data = {'version': 1, 'event': body.model_dump(), 'sender_id': who, 'created_at': clock(), 'state': snapshot}
             c.execute('INSERT INTO events(id,pair,owner,hash,data) VALUES(?,?,?,?,?)', (body.event_id, body.pair_id, who, digest(canonical), json.dumps(data)))
             data['cursor'] = c.execute('SELECT last_insert_rowid()').fetchone()[0]
@@ -293,12 +318,12 @@ def create_app(db_path=None, admin_key=None, clock=time.time):
     def state(pid: str, who=Depends(auth)):
         with db() as c:
             p = pair(c, pid, who)
-            return {'version': 1, 'hats': {r['owner']: json.loads(r['data']) for r in c.execute('SELECT * FROM hats WHERE owner IN (?,?)', (p['a'], p['b']))},
-                    'sessions': [{'session_id': r['id'], 'version': r['version'], **json.loads(r['data'])} for r in c.execute('SELECT * FROM sessions WHERE pair=?', (pid,))]}
+            return {'version': 1, 'cursor': c.execute('SELECT coalesce(max(seq),0) FROM events').fetchone()[0], 'hats': {r['owner']: json.loads(r['data']) for r in c.execute('SELECT * FROM hats WHERE owner IN (?,?)', (p['a'], p['b']))},
+                    'sessions': [{'session_id': r['id'], 'version': r['version'], 'creator_id': r['creator'], 'created_at': r['created_at'], **json.loads(r['data'])} for r in c.execute('SELECT * FROM sessions WHERE pair=?', (pid,))]}
 
     def backlog(who, after):
         with db() as c:
-            return [json.loads(r['data']) for r in c.execute('''SELECT e.data FROM events e JOIN pairs p ON p.id=e.pair
+            return [wire_event(c, r['data']) for r in c.execute('''SELECT e.data FROM events e JOIN pairs p ON p.id=e.pair
                 WHERE e.seq>? AND (p.a=? OR p.b=?) AND p.ca=1 AND p.cb=1 AND p.revoked=0
                 ORDER BY e.seq LIMIT 100''', (after, who, who))]
 

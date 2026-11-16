@@ -79,6 +79,25 @@ final class WinterEventTests: XCTestCase {
         }
     }
 
+    func testServerRouteFailureCannotEnqueueTelegramFallback() throws {
+        final class Route: WinterServerTransport {
+            func owns(accountID: Int64, peerID: Int64) -> Bool { true }
+            func record(_ event: WinterEvent, accountID: Int64) -> Bool { false }
+            func session(accountID: Int64, peerID: Int64) -> WinterSnowmanSession? { nil }
+            func snowballs(accountID: Int64, peerID: Int64, consume: Bool) -> [WinterEvent] { [] }
+        }
+        let previous = WinterEventTransport.serverTransport
+        let route = Route()
+        WinterEventTransport.serverTransport = route
+        defer { WinterEventTransport.serverTransport = previous }
+        try self.withTransport { transport, _, clock in
+            let event = try self.event(transport, .snowball)
+            XCTAssertFalse(transport.recordOutgoing(event, accountID: 111))
+            XCTAssertTrue(transport.pendingOutgoing(accountID: 111).isEmpty)
+            XCTAssertFalse(try self.receive(event, on: transport, timestamp: clock.timestamp))
+        }
+    }
+
     func testVisibleVersionedEnvelopeRejectsInvalidAndOversizedData() throws {
         try self.withTransport { transport, _, clock in
             let event = try self.event(transport, .snowball)

@@ -26,12 +26,13 @@ func snowHatPublishingController(context: AccountContext, configuration: SnowHat
             return
         }
         let name = peer.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder)
-        let explanation = russian
+        let serverMode = WinterSyncHub.shared.owns(accountID: context.account.peerId.toInt64(), peerID: peer.id.toInt64())
+        let explanation = serverMode ? (russian ? "Опубликовать шапку через подключённую пару Winter Sync? Техническое сообщение Telegram не отправляется. При сбое сервиса публикация останется в очереди." : "Publish via the paired Winter Sync service? No technical Telegram message is sent. Offline publications remain queued.") : russian
             ? "В чат с \(name) будет отправлено обычное видимое сообщение с настройками шапки. Совместимый Telegram Snow покажет её на вашей аватарке. Каждое изменение и отключение нужно опубликовать снова. Отправить?"
             : "An ordinary visible message with your hat settings will be sent to \(name). A compatible Telegram Snow client will display it on your avatar. Publish again after every change or when disabling your hat. Send?"
         picker.present(textAlertController(context: context, title: russian ? "Сохранить и опубликовать" : "Save and Publish", text: explanation, actions: [
             TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {}),
-            TextAlertAction(type: .defaultAction, title: russian ? "Отправить сообщение" : "Send Message", action: { [weak picker] in
+            TextAlertAction(type: .defaultAction, title: russian ? "Подтвердить публикацию" : "Confirm Publish", action: { [weak picker] in
                 guard let picker, !picker.inProgress else { return }
                 var published = configuration
                 // Re-publication is a new update, bound to this message's server timestamp.

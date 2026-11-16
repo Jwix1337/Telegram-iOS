@@ -1,3 +1,49 @@
+# Winter Sync — iOS-интеграция, 2026-11-16
+
+Ветка codex/winter-validation, один агент. Master, VPS/VPN, сертификаты и порты не изменялись; IPA не собиралась. Этап реализации интеграции завершён, переход к развёртыванию не выполнять.
+
+## Реализовано
+
+- URLSession HTTPS + WSS по фактическому API: bearer только в заголовке HTTP/первом WS frame, системный TLS, запрет redirects/cookies/cache, лимиты ответов и foreground reconnect/backoff.
+- В меню зимних действий личного чата добавлен Winter Sync setup: импорт только выданных device ID/key (не admin key), проверка GET /v1/device, код/claim/подтверждение пары обеими сторонами, явная локальная привязка UUID к выбранному peer ID, отзыв пары и удаление локального ключа. Один credential не переиспользуется для разных локальных аккаунтов.
+- Ключи в Keychain WhenUnlockedThisDeviceOnly. Telegram ID остаются только локально, HTTP/WS их не содержат.
+- Подключение к WinterEventTransport: серверные маршруты эксклюзивны. При сбоях/отзыве/удалении ключа отсутствует автоматический fallback в технические сообщения Telegram. Старые неподключённые чаты сохраняют прежний добровольный транспорт.
+- Долговечная очередь неизменяемых серверных запросов, cursor replay, отдельная дедупликация снежков/TTL120с, атомарное локальное применение батча. Ответ POST не продвигает replay cursor. Пары перечитываются каждые30с для обнаружения удалённого отзыва. Фон отменяет задачи, foreground восстанавливает состояние; SnowEffect от сети не зависит.
+- Авторитетные версии серверного снеговика проецируются в существующий UI отдельно от Telegram CRDT. Конфликт409 обновляет снимок и блокирует старое действие до явного повтора с новым ID; скрытого перезаписывания нет.
+
+## Исправленные первопричины несовместимости API
+
+Исходный сервер не выдавал собственный device_id и автора/время приглашения в снимке, поэтому безопасная идентификация invitee была невозможна. Добавлены фактические GET /v1/device и поля creator_id/created_at/cursor; документация обновлена. SQLite-v1 мигрирует без потери состояния, исторические ответы обогащаются метаданными при replay/idempotent retry. Глобальный watermark учитывает шапки, опубликованные через другую согласованную пару. Нужна именно эта обновлённая версия сервера; старый сервер не поддерживается молчаливыми предположениями.
+
+## Реальные проверки
+
+10 серверных unittest прошли: прежние ACL/pairing/rate/idempotency/конкуренция + новый контракт identity/snapshot, миграция старой SQLite и исторических событий, глобальный watermark. Синтаксический tree-sitter разбор 8 затронутых Swift-файлов без ошибок, git diff --check чистый. Это НЕ Swift type checking.
+
+Добавлены 5 XCTest URLSession/DTO (HTTPS, bearer/no URL token, wire без Telegram ID/Lamport clock,409, обязательные поля снимка) и регрессионный тест запрета fallback. Они НЕ запускались: Swift/Xcode/iOS SDK отсутствуют в текущем Linux. Существующий Foundation test runner расширен для client tests на macOS12+; GitHub Actions ранее отключены, не запускались.
+
+## Изменённые файлы
+
+SnowEffect/Sources: WinterSyncClient.swift, WinterSyncService.swift, WinterSyncSetupViewController.swift (новые), WinterEventTransport.swift.
+SnowEffect/Tests: WinterSyncClientTests.swift (новый), WinterEventTests.swift.
+TelegramUI/Sources/WinterChatInteractions.swift; SettingsUI/Sources/Themes/SnowHatPublishing.swift.
+build-system/SnowEffect/test_winter_models.py; winter-sync/app.py, test_service.py, API.md; CODEX_PROGRESS.md.
+
+## Блокеры и следующая проверка (только отдельным заданием)
+
+Нет real HTTPS/WSS endpoint/device credentials и проверки на двух iPhone. Нужны Apple SDK typecheck/XCTest, реальная проверка Keychain/привязки/фона/reconnect/отзыва/конкуренции. Не заявлять, что сеть или сборка iOS проверена. Не развёртывать VPS и не собирать IPA автоматически.
+
+Команды:
+```
+cd /workspace/TelegramSnow
+python3 -m unittest discover -s winter-sync -q
+git diff --check
+# только на macOS со Swift:
+python3 build-system/SnowEffect/test_winter_models.py
+# iOS XCTest target: //submodules/SnowEffect:SnowEffectTests
+```
+
+---
+
 # Winter Sync Service — серверный этап, 2026-11-16
 
 Ветка codex/winter-validation. Работа одним агентом. Предыдущий прогресс сохранён ниже.
