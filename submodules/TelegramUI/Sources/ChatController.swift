@@ -8039,7 +8039,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         self.chatDisplayNode.setSnowMoldHandler(nil)
         guard self.snowScreenIsVisible, self.snowEffectsAllowed,
               case let .peer(peerID) = self.chatLocation,
-              peerID.namespace == Namespaces.Peer.CloudUser, peerID != self.context.account.peerId,
+              peerID.namespace == Namespaces.Peer.CloudUser,
               let user = self.presentationInterfaceState.renderedPeer?.peer as? TelegramUser,
               user.botInfo == nil else {
             self.winterInteractions?.setVisible(false)
@@ -8056,6 +8056,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             })
             self.winterInteractionPeerID = peerID
         }
+        self.winterInteractions?.reserveBall = { [weak self] in self?.chatDisplayNode.reserveWinterSnowball() }
         self.chatDisplayNode.setSnowMoldHandler { [weak self] ticket in
             self?.winterInteractions?.useMoldedBall(ticket)
         }

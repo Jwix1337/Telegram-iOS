@@ -1201,6 +1201,13 @@ public final class AvatarNode: ASDisplayNode {
     public var snowHatDecorationEnabled = false {
         didSet { self.updateSnowHatOverlay() }
     }
+    private var snowHatHasDecoration = false
+    private var snowHatPhotoScale: CGFloat { self.snowHatHasDecoration ? SnowHatLayout.photoScale : 1.0 }
+    public var snowHatLayoutChanged: ((CGRect) -> Void)?
+    public var snowHatPhotoFrame: CGRect {
+        let size = self.snowHatSize ?? self.bounds.size
+        return SnowHatLayout.photoFrame(in: CGRect(origin: .zero, size: size), decorated: self.snowHatHasDecoration)
+    }
     private let snowHatIdentityLock = NSLock()
     private var snowHatIdentityRevision: UInt64 = 0
     private var snowHatOverlay: SnowHatOverlayView?
@@ -1314,10 +1321,11 @@ public final class AvatarNode: ASDisplayNode {
     }
     
     public func updateSize(size: CGSize) {
-        self.contentNode.position = CGRect(origin: CGPoint(), size: size).center
+        self.contentNode.position = CGPoint(x: size.width / 2, y: size.height * (1 - self.snowHatPhotoScale / 2))
         self.contentNode.bounds = CGRect(origin: CGPoint(), size: size)
         
         self.contentNode.updateSize(size: size)
+        self.contentNode.transform = CATransform3DMakeScale(self.snowHatPhotoScale, self.snowHatPhotoScale, 1)
         
         self.updateStoryIndicator(transition: .immediate)
         self.updateSnowHatOverlay(size: size)
@@ -1370,6 +1378,12 @@ public final class AvatarNode: ASDisplayNode {
         if self.snowHatDecorationEnabled, self.snowHatOverlay == nil, self.snowHatPeerID != nil {
             let overlay = SnowHatOverlayView(frame: .zero)
             self.snowHatOverlay = overlay
+            overlay.onConfigurationChanged = { [weak self] enabled in
+                guard let self, self.snowHatHasDecoration != enabled else { return }
+                self.snowHatHasDecoration = enabled
+                self.updateSize(size: self.snowHatSize ?? self.bounds.size)
+                self.snowHatLayoutChanged?(self.snowHatPhotoFrame)
+            }
             // A layer-only decoration also works for layer-backed AvatarNodes.
             // It is a sibling of contentNode, outside the photo/video's circular mask.
             overlay.layer.zPosition = 0.01
@@ -1378,6 +1392,8 @@ public final class AvatarNode: ASDisplayNode {
         if let overlay = self.snowHatOverlay {
             overlay.configure(accountID: self.snowHatAccountID, peerID: self.snowHatDecorationEnabled ? self.snowHatPeerID : nil)
             let frame = CGRect(origin: .zero, size: self.snowHatSize ?? self.bounds.size)
+            overlay.avatarFrame = self.snowHatPhotoFrame
+            overlay.confinementBounds = SnowHatLayout.crownBounds(in: CGRect(origin: .zero, size: frame.size))
             if overlay.frame != frame {
                 overlay.frame = frame
                 overlay.layoutIfNeeded()
@@ -1605,11 +1621,12 @@ public final class AvatarNode: ASDisplayNode {
                 if storyIndicatorView.superview == nil {
                     self.view.insertSubview(storyIndicatorView, aboveSubview: self.contentNode.view)
                 }
-                indicatorTransition.setFrame(view: storyIndicatorView, frame: CGRect(origin: CGPoint(x: (size.width - indicatorSize.width) * 0.5, y: (size.height - indicatorSize.height) * 0.5), size: indicatorSize))
+                indicatorTransition.setFrame(view: storyIndicatorView, frame: CGRect(origin: CGPoint(x: (size.width - indicatorSize.width) * 0.5, y: (size.height - indicatorSize.height) * 0.5 + size.height * (1 - self.snowHatPhotoScale) / 2), size: indicatorSize))
+                indicatorTransition.setScale(view: storyIndicatorView, scale: self.snowHatPhotoScale)
             }
-            transition.setScale(view: self.contentNode.view, scale: avatarScale)
+            transition.setScale(view: self.contentNode.view, scale: avatarScale * self.snowHatPhotoScale)
         } else {
-            transition.setScale(view: self.contentNode.view, scale: 1.0)
+            transition.setScale(view: self.contentNode.view, scale: self.snowHatPhotoScale)
             if let storyIndicator = self.storyIndicator {
                 self.storyIndicator = nil
                 if let storyIndicatorView = storyIndicator.view {

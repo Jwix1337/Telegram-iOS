@@ -1126,6 +1126,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         snowAccumulationView.onMold = handler
     }
 
+    func reserveWinterSnowball() -> SnowMoldTicket? { self.snowAccumulationView.reserveSnowball() }
+
     func clearSnowFromShake() {
         self.snowAccumulationView.clearFromShake()
     }
@@ -1143,7 +1145,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         let height = max(0, miniReserveHeight - 8)
         if let image = miniSnowman.image(for: .normal), image.size.height > 0 {
             let width = height * image.size.width / image.size.height
-            miniSnowman.frame = CGRect(x: (anchor.bounds.width - width) * 0.5, y: -height - 2, width: width, height: height)
+            miniSnowman.frame = CGRect(x: (panel.snowAccumulationSurfaces.first?.midX ?? anchor.bounds.midX) - width / 2, y: (panel.snowAccumulationSurfaces.first?.minY ?? 0) - height - 2, width: width, height: height)
         }
         miniSnowman.isHidden = miniReserveHeight == 0 || !snowEffectIsVisible || miniSnowman.image(for: .normal) == nil
         if self.snowAccumulationView.superview !== anchor {
@@ -1152,7 +1154,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
         // Local to the field, above its top edge: never over text, send or recording controls.
         // The field itself owns every keyboard, multiline and send transition.
-        self.snowAccumulationView.frame = CGRect(x: 0.0, y: -24.0, width: anchor.bounds.width, height: 24.0)
+        self.snowAccumulationView.frame = CGRect(x: 0.0, y: -24.0, width: anchor.bounds.width, height: max(24, (panel.snowAccumulationSurfaces.map { $0.minY + min($0.height, $0.width) / 2 }.max() ?? 0) + 24))
+        self.snowAccumulationView.setSurfaces(panel.snowAccumulationSurfaces, cornerRadii: panel.snowAccumulationCornerRadii)
         self.snowAccumulationView.isHidden = !self.snowEffectIsVisible || self.chatPresentationInterfaceState.inputTextPanelState.mediaRecordingState != nil
         self.snowAccumulationView.isEffectVisible = !self.snowAccumulationView.isHidden
     }
@@ -4705,8 +4708,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         
         // The bank extends above the field, outside its parent's bounds. Forward only
         // hits on the snow shape after Telegram's input and context overlays had priority.
-        if let result = self.miniSnowman.hitTest(self.view.convert(point, to: self.miniSnowman), with: event) { return result }
-        if let result = self.snowAccumulationView.hitTest(self.view.convert(point, to: self.snowAccumulationView), with: event) {
+        if !self.miniSnowman.isHidden, self.view.window != nil, self.miniSnowman.window === self.view.window, let result = self.miniSnowman.hitTest(self.view.convert(point, to: self.miniSnowman), with: event) { return result }
+        if !self.snowAccumulationView.isHidden, self.view.window != nil, self.snowAccumulationView.window === self.view.window, let result = self.snowAccumulationView.hitTest(self.view.convert(point, to: self.snowAccumulationView), with: event) {
             return result
         }
         return nil

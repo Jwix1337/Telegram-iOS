@@ -2672,6 +2672,9 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     #endif
     
     private func openUrl(url: URL) {
+        // Winter message links only bring the app forward. Event application requires
+        // an authenticated incoming Message and is deliberately never done by a URL tap.
+        if url.scheme?.lowercased() == "telegram-snow" { return }
         let _ = (self.sharedContextPromise.get()
         |> take(1)
         |> mapToSignal { sharedApplicationContext -> Signal<(SharedAccountContextImpl, AuthorizedApplicationContext?, UnauthorizedApplicationContext?), NoError> in

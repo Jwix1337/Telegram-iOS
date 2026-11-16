@@ -32,6 +32,8 @@ public struct WinterEvent: Codable, Equatable {
     public enum Kind: String, Codable {
         case hat, snowball, snowman_invite, snowman_accept, snowman_update, snowman_complete
 
+        public var symbol: String { self == .snowball ? "❄️" : self == .hat ? "🎄" : "⛄" }
+
         public var label: String {
             switch self {
             case .hat: return "🎄 Шапка / Holiday hat"
@@ -104,6 +106,7 @@ public struct WinterSnowmanSession: Codable, Equatable {
     }
     public func value(_ part: SnowmanPart) -> Int? { self.registers[part]?.value }
     public var nextClock: Int64 { min(1_000_000_000, (self.registers.values.map(\.clock).max() ?? 0) + 1) }
+    public var isSolo: Bool { self.inviterID == self.inviteeID }
     public var isBuilt: Bool { SnowmanPart.assembly.allSatisfy { self.contains($0) } }
 
     static func serverSnapshot(id: String, inviter: Int64, invitee: Int64, createdAt: Int64,
@@ -196,6 +199,93 @@ public final class WinterEventTransport: NSObject {
         guard event.isValid, let data = try? JSONEncoder().encode(event), let json = String(data: data, encoding: .utf8) else { return nil }
         let text = Self.messagePrefix + event.type.label + "\n" + json
         return text.utf8.count <= Self.maximumMessageBytes ? text : nil
+    }
+
+    /// An ordinary visible emoji link, explicitly confirmed by its sender. The URL is
+    /// app-local data, never a request to a third-party service or executable content.
+    public func visibleMessage(_ event: WinterEvent) -> (text: String, url: String)? {
+        guard let text = self.messageText(event) else { return nil }
+        let payload = Data(text.utf8).base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
+        let url = "telegram-snow://winter/v1?payload=" + payload
+        guard url.utf8.count <= 6000 else { return nil }
+        return (event.type.symbol, url)
+    }
+
+    /// Decoding is not authentication: receive() must still verify the actual author,
+    /// message timestamp, destination, state transitions and replay ledger.
+    public func messageText(fromEventLink link: String, displayText: String? = nil) -> String? {
+        guard link.utf8.count <= 6000, let url = URLComponents(string: link),
+              url.scheme == "telegram-snow", url.host == "winter", url.path == "/v1",
+              url.user == nil, url.password == nil, url.port == nil, url.fragment == nil,
+              let items = url.queryItems, items.count == 1, items[0].name == "payload",
+              let payload = items[0].value, !payload.isEmpty,
+              payload.utf8.allSatisfy({ (65...90).contains($0) || (97...122).contains($0) || (48...57).contains($0) || $0 == 45 || $0 == 95 }) else { return nil }
+        var base64 = payload.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        base64 += String(repeating: "=", count: (4 - base64.count % 4) % 4)
+        guard let data = Data(base64Encoded: base64), data.count <= Self.maximumMessageBytes,
+              let text = String(data: data, encoding: .utf8), text.hasPrefix(Self.messagePrefix) else { return nil }
+        let body = text.dropFirst(Self.messagePrefix.count)
+        guard let separator = body.firstIndex(of: "\n"),
+              let event = try? JSONDecoder().decode(WinterEvent.self, from: Data(body[body.index(after: separator)...].utf8)),
+              event.isValid, String(body[..<separator]) == event.type.label,
+              displayText == nil || displayText == event.type.symbol else { return nil }
+        return text
+    }
+
+    private func soloKey(accountID: Int64, peerID: Int64) -> String { "SnowEffect.soloSnowman.v1.\(accountID).\(peerID)" }
+
+    /// Independent private game; never enters the shared event ledger or network outbox.
+    private func readSolo(accountID: Int64, peerID: Int64) -> WinterSnowmanSession? {
+        guard let data = self.defaults.data(forKey: soloKey(accountID: accountID, peerID: peerID)), data.count <= 16000,
+              let session = try? JSONDecoder().decode(WinterSnowmanSession.self, from: data),
+              session.isSolo, session.inviterID == accountID, session.accepted,
+              UUID(uuidString: session.sessionID) != nil, session.createdAt > 0,
+              session.registers.count <= 10, (!session.completed || session.isBuilt),
+              session.registers.allSatisfy({ part, value in value.authorID == accountID && UUID(uuidString: value.eventID) != nil && SnowmanMutation(part: part, value: value.value, clock: value.clock).isValid }) else { return nil }
+        return session
+    }
+
+    public func soloSession(accountID: Int64, peerID: Int64) -> WinterSnowmanSession? {
+        guard accountID > 0, peerID > 0 else { return nil }
+        self.lock.lock(); defer { self.lock.unlock() }
+        return readSolo(accountID: accountID, peerID: peerID)
+    }
+
+    public func startSoloSession(accountID: Int64, peerID: Int64) -> WinterSnowmanSession? {
+        guard accountID > 0, peerID > 0 else { return nil }
+        self.lock.lock()
+        if let current = readSolo(accountID: accountID, peerID: peerID) { self.lock.unlock(); return current }
+        var session = WinterSnowmanSession(sessionID: UUID().uuidString, inviterID: accountID, inviteeID: accountID, createdAt: self.milliseconds)
+        session.accepted = true
+        guard let data = try? JSONEncoder().encode(session) else { self.lock.unlock(); return nil }
+        self.defaults.set(data, forKey: soloKey(accountID: accountID, peerID: peerID))
+        self.lock.unlock()
+        self.notify(accountID: accountID, peerID: peerID)
+        return session
+    }
+
+    @discardableResult public func updateSoloSession(accountID: Int64, peerID: Int64, sessionID: String, mutation: SnowmanMutation? = nil, complete: Bool = false) -> WinterSnowmanSession? {
+        guard accountID > 0, peerID > 0 else { return nil }
+        self.lock.lock()
+        guard var session = readSolo(accountID: accountID, peerID: peerID), session.sessionID == sessionID else { self.lock.unlock(); return nil }
+        if let mutation {
+            guard !session.completed, mutation.isValid, mutation.clock == session.nextClock else { self.lock.unlock(); return nil }
+            if SnowmanPart.assembly.contains(mutation.part) {
+                guard SnowmanPart.assembly.first(where: { !session.contains($0) }) == mutation.part else { self.lock.unlock(); return nil }
+            } else {
+                guard session.contains(.head) else { self.lock.unlock(); return nil }
+            }
+            session.registers[mutation.part] = WinterSnowmanSession.Register(value: mutation.value, clock: mutation.clock, authorID: accountID, eventID: UUID().uuidString)
+        }
+        if complete {
+            guard session.isBuilt else { self.lock.unlock(); return nil }
+            session.completed = true
+        }
+        guard let data = try? JSONEncoder().encode(session), data.count <= 16000 else { self.lock.unlock(); return nil }
+        self.defaults.set(data, forKey: soloKey(accountID: accountID, peerID: peerID))
+        self.lock.unlock()
+        self.notify(accountID: accountID, peerID: peerID)
+        return session
     }
 
     /// The caller must already have confirmed a visible message to this particular recipient.

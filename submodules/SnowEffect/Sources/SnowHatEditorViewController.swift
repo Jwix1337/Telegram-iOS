@@ -159,6 +159,7 @@ public final class SnowHatEditorViewController: UIViewController, UIGestureRecog
         self.avatarPreviewView?.frame = self.avatar.bounds
         self.avatarPreviewLayout?(self.avatar.bounds.size)
         self.overlay.frame = self.avatar.frame
+        self.overlay.confinementBounds = CGRect(x: 8 - self.avatar.frame.minX, y: 8 - self.avatar.frame.minY, width: self.previewContainer.bounds.width - 16, height: self.avatar.frame.minY + self.avatar.frame.height * 0.72 - 8)
         self.overlay.layoutIfNeeded()
     }
 

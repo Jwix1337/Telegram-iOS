@@ -28,12 +28,24 @@ final class WinterEventAccountBridge {
         WinterSyncHub.shared.start(accountID: accountID)
         self.incoming = context.account.stateManager.incomingMessages.start(next: { messages in
             for message in messages {
-                guard message.text.hasPrefix(WinterEventTransport.messagePrefix) || message.text.hasPrefix(SnowHatConfiguration.messagePrefix),
-                      message.id.namespace == Namespaces.Message.Cloud,
+                guard message.id.namespace == Namespaces.Message.Cloud,
                       message.id.peerId.namespace == Namespaces.Peer.CloudUser,
                       message.forwardInfo == nil,
                       let author = message.author, author.id == message.id.peerId else { continue }
-                let _ = WinterEventTransport.shared.receive(messageText: message.text, authorID: author.id.toInt64(), accountID: accountID, messageTimestamp: message.timestamp)
+                var payload = message.text
+                if !payload.hasPrefix(WinterEventTransport.messagePrefix) && !payload.hasPrefix(SnowHatConfiguration.messagePrefix) {
+                    var decoded: String?
+                    for attribute in message.attributes {
+                        guard let entities = attribute as? TextEntitiesMessageAttribute else { continue }
+                        for entity in entities.entities where entity.range == 0..<message.text.utf16.count {
+                            if case let .TextUrl(url) = entity.type,
+                               let value = WinterEventTransport.shared.messageText(fromEventLink: url, displayText: message.text) { decoded = value }
+                        }
+                    }
+                    guard let decoded else { continue }
+                    payload = decoded
+                }
+                let _ = WinterEventTransport.shared.receive(messageText: payload, authorID: author.id.toInt64(), accountID: accountID, messageTimestamp: message.timestamp)
             }
         })
         let center = NotificationCenter.default
@@ -77,12 +89,12 @@ final class WinterEventAccountBridge {
               let context = self.context else { return }
         let accountID = context.account.peerId.toInt64()
         guard let event = WinterEventTransport.shared.pendingOutgoing(accountID: accountID).first(where: { !WinterSyncHub.shared.owns(accountID: accountID, peerID: $0.recipientID) }),
-              let text = WinterEventTransport.shared.messageText(event),
+              let visibleMessage = WinterEventTransport.shared.visibleMessage(event),
               event.type == .hat || WinterSyncHub.needsConnection(accountID: accountID) else { return }
         self.sending = true
         self.retry?.invalidate()
         self.retry = nil
-        let message: EnqueueMessage = .message(text: text, attributes: [], inlineStickers: [:], mediaReference: nil, threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
+        let message: EnqueueMessage = .message(text: visibleMessage.text, attributes: [TextEntitiesMessageAttribute(entities: [MessageTextEntity(range: 0..<visibleMessage.text.utf16.count, type: .TextUrl(url: visibleMessage.url))])], inlineStickers: [:], mediaReference: nil, threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
         self.outgoing.set((enqueueMessages(account: context.account, peerId: EnginePeer.Id(event.recipientID), messages: [message])
         |> deliverOnMainQueue).start(next: { [weak self] ids in
             guard let self, !self.stopped else { return }
@@ -106,6 +118,16 @@ final class WinterChatInteractions: NSObject {
     private weak var host: ViewController?
     private let sendImage: (UIImage) -> Void
     private let snowball = WinterSnowballView(frame: .zero)
+    var reserveBall: (() -> SnowMoldTicket?)?
+    private var soloMode = false
+    private var soloModeKey: String { "SnowEffect.soloMode.v1.\(self.accountID).\(self.peerID.toInt64())" }
+    private var currentSession: WinterSnowmanSession? {
+        self.soloMode ? WinterEventTransport.shared.soloSession(accountID: self.accountID, peerID: self.peerID.toInt64()) : WinterEventTransport.shared.session(accountID: self.accountID, peerID: self.peerID.toInt64())
+    }
+    private func selectSolo(_ enabled: Bool) {
+        self.soloMode = enabled
+        UserDefaults.standard.set(enabled, forKey: self.soloModeKey)
+    }
     var onMiniSession: ((WinterSnowmanSession?) -> Void)?
     private var visible = false
     private weak var snowmanHost: WinterSnowmanHostController?
@@ -121,6 +143,7 @@ final class WinterChatInteractions: NSObject {
         self.host = host
         self.sendImage = sendImage
         super.init()
+        self.soloMode = UserDefaults.standard.bool(forKey: self.soloModeKey)
         self.button.accessibilityLabel = self.text("Зимние действия", "Winter Actions")
         let center = NotificationCenter.default
         center.addObserver(self, selector: #selector(self.changed), name: WinterEventTransport.didChange, object: WinterEventTransport.shared)
@@ -150,7 +173,7 @@ final class WinterChatInteractions: NSObject {
     }
 
     private var canPresent: Bool {
-        return self.visible && UIApplication.shared.applicationState == .active && self.host?.isViewLoaded == true && self.host?.view.window != nil
+        return UIApplication.shared.applicationState == .active && ((self.snowmanHost?.isViewLoaded == true && self.snowmanHost?.view.window != nil) || (self.visible && self.host?.isViewLoaded == true && self.host?.view.window != nil))
     }
 
     private func text(_ ru: String, _ en: String) -> String { self.russian ? ru : en }
@@ -166,7 +189,7 @@ final class WinterChatInteractions: NSObject {
 
     private func installButton() {
         let settings = SnowEffectPreferences.shared.settings
-        guard self.canPresent, settings.winterSnowballsEnabled || settings.winterSnowmanEnabled,
+        guard self.visible, self.canPresent, settings.winterSnowballsEnabled || settings.winterSnowmanEnabled,
               let host = self.host else {
             self.removeButton()
             return
@@ -184,11 +207,11 @@ final class WinterChatInteractions: NSObject {
     }
 
     func openCurrentSnowman() {
-        if let session = WinterEventTransport.shared.session(accountID: accountID, peerID: peerID.toInt64()), session.completed { openSnowman(session) }
+        if let session = self.currentSession, session.completed { openSnowman(session) }
     }
     private func refresh() {
-        onMiniSession?(WinterEventTransport.shared.session(accountID: accountID, peerID: peerID.toInt64()))
-        if let session = WinterEventTransport.shared.session(accountID: self.accountID, peerID: self.peerID.toInt64()) {
+        onMiniSession?(self.currentSession)
+        if let session = self.currentSession {
             self.snowmanSessionID = session.sessionID
             self.snowmanHost?.update(session: session)
             if self.pendingServerOpen == session.sessionID, self.canPresent {
@@ -196,7 +219,7 @@ final class WinterChatInteractions: NSObject {
             }
         }
         self.installButton()
-        guard self.canPresent, let host = self.host else {
+        guard self.visible, UIApplication.shared.applicationState == .active, let host = self.host, host.isViewLoaded, host.view.window != nil else {
             self.snowball.stop()
             return
         }
@@ -224,45 +247,74 @@ final class WinterChatInteractions: NSObject {
         let session = WinterEventTransport.shared.session(accountID: self.accountID, peerID: self.peerID.toInt64())
         let sheet = ActionSheetController(presentationData: self.context.sharedContext.currentPresentationData.with { $0 })
         var items: [ActionSheetItem] = []
-        if settings.winterSnowballsEnabled {
+        if settings.winterSnowballsEnabled && self.peerID.toInt64() != self.accountID {
             items.append(ActionSheetButtonItem(title: self.text("Бросить снежок", "Throw Snowball"), color: .accent, action: { [weak self, weak sheet] in
                 sheet?.dismissAnimated()
                 self?.notice("Слепите снежок: удерживайте сугроб над полем ввода и проведите пальцем.")
             }))
         }
         if settings.winterSnowmanEnabled {
-            if let session, !session.completed {
-                let needsAccept = !session.accepted && session.inviteeID == self.accountID
-                items.append(ActionSheetButtonItem(title: needsAccept ? self.text("Принять приглашение слепить снеговика", "Accept Snowman Invitation") : self.text("Открыть общего снеговика", "Open Shared Snowman"), color: .accent, action: { [weak self, weak sheet] in
-                    sheet?.dismissAnimated()
-                    if needsAccept { self?.request(type: .snowman_accept, sessionID: session.sessionID, openAfter: true) }
-                    else { self?.openSnowman(session) }
-                }))
-            } else {
-                items.append(ActionSheetButtonItem(title: self.text("Слепить снеговика", "Build Snowman"), color: .accent, action: { [weak self, weak sheet] in
-                    sheet?.dismissAnimated()
-                    self?.request(type: .snowman_invite, openAfter: true)
-                }))
+            items.append(ActionSheetButtonItem(title: self.text("Мой снеговик — слепить самому", "My Snowman — Build Solo"), color: .accent, action: { [weak self, weak sheet] in
+                sheet?.dismissAnimated()
+                guard let self else { return }
+                self.selectSolo(true)
+                if let local = WinterEventTransport.shared.startSoloSession(accountID: self.accountID, peerID: self.peerID.toInt64()) { self.openSnowman(local); self.refresh() }
+            }))
+            if self.peerID.toInt64() != self.accountID {
+                if let session, !session.completed {
+                    let needsAccept = !session.accepted && session.inviteeID == self.accountID
+                    items.append(ActionSheetButtonItem(title: needsAccept ? self.text("Принять приглашение слепить снеговика", "Accept Snowman Invitation") : self.text("Открыть общего снеговика", "Open Shared Snowman"), color: .accent, action: { [weak self, weak sheet] in
+                        sheet?.dismissAnimated()
+                        if needsAccept { self?.request(type: .snowman_accept, sessionID: session.sessionID, openAfter: true) }
+                        else { self?.selectSolo(false); self?.openSnowman(session); self?.refresh() }
+                    }))
+                } else {
+                    items.append(ActionSheetButtonItem(title: self.text("Пригласить собеседника", "Invite Chat Partner"), color: .accent, action: { [weak self, weak sheet] in
+                        sheet?.dismissAnimated()
+                        self?.request(type: .snowman_invite, openAfter: true)
+                    }))
+                }
             }
         }
-        items.append(ActionSheetButtonItem(title: "Winter Sync · HTTPS / WebSocket", color: .accent, action: { [weak self, weak sheet] in
-            sheet?.dismissAnimated()
-            guard let self else { return }
-            let settings = WinterSyncSetupViewController(accountID: self.accountID, peerID: self.peerID.toInt64())
-            self.host?.present(settings, animated: true)
-        }))
+        if self.peerID.toInt64() != self.accountID {
+            items.append(ActionSheetButtonItem(title: self.text("Связать устройства Winter Sync", "Pair Winter Sync Devices"), color: .accent, action: { [weak self, weak sheet] in
+                sheet?.dismissAnimated()
+                guard let self else { return }
+                let settings = WinterSyncSetupViewController(accountID: self.accountID, peerID: self.peerID.toInt64())
+                self.host?.present(settings, animated: true)
+            }))
+        }
         sheet.setItemGroups([ActionSheetItemGroup(items: items), ActionSheetItemGroup(items: [ActionSheetButtonItem(title: self.text("Отмена", "Cancel"), color: .accent, action: { [weak sheet] in sheet?.dismissAnimated() })])])
         self.host?.present(sheet, in: .window(.root))
+    }
+
+    private func addSoloBall(_ ticket: SnowMoldTicket) {
+        self.selectSolo(true)
+        guard let session = WinterEventTransport.shared.startSoloSession(accountID: self.accountID, peerID: self.peerID.toInt64()),
+              let part = [SnowmanPart.bottom, .middle, .head].first(where: { !session.contains($0) }) else {
+            ticket.resolve(commit: false)
+            if let session = self.currentSession { self.openSnowman(session) }
+            return
+        }
+        let updated = WinterEventTransport.shared.updateSoloSession(accountID: self.accountID, peerID: self.peerID.toInt64(), sessionID: session.sessionID, mutation: SnowmanMutation(part: part, value: 1, clock: session.nextClock))
+        ticket.resolve(commit: updated != nil)
+        if let updated { self.openSnowman(updated) }
     }
 
     func useMoldedBall(_ ticket: SnowMoldTicket) {
         guard canPresent else { ticket.resolve(commit: false); return }
         let sheet = ActionSheetController(presentationData: context.sharedContext.currentPresentationData.with { $0 })
-        sheet.setItemGroups([ActionSheetItemGroup(items: [
-            ActionSheetButtonItem(title: "Бросить снежок собеседнику", color: .accent, action: { [weak self, weak sheet] in
+        var items: [ActionSheetItem] = []
+        items.append(ActionSheetButtonItem(title: "Добавить к моему снеговику", color: .accent, action: { [weak self, weak sheet] in
+            sheet?.dismissAnimated()
+            guard let self else { ticket.resolve(commit: false); return }
+            self.addSoloBall(ticket)
+        }))
+        if self.peerID.toInt64() != self.accountID {
+            items.append(ActionSheetButtonItem(title: "Бросить снежок собеседнику", color: .accent, action: { [weak self, weak sheet] in
                 sheet?.dismissAnimated(); self?.request(type: .snowball, ticket: ticket)
-            }),
-            ActionSheetButtonItem(title: "Добавить к общему снеговику", color: .accent, action: { [weak self, weak sheet] in
+            }))
+            items.append(ActionSheetButtonItem(title: "Добавить к общему снеговику", color: .accent, action: { [weak self, weak sheet] in
                 sheet?.dismissAnimated()
                 guard let self else { ticket.resolve(commit: false); return }
                 guard let session = WinterEventTransport.shared.session(accountID: self.accountID, peerID: self.peerID.toInt64()), session.accepted else {
@@ -271,19 +323,21 @@ final class WinterChatInteractions: NSObject {
                     return
                 }
                 guard let part = [SnowmanPart.bottom, .middle, .head].first(where: { !session.contains($0) }) else {
-                    ticket.resolve(commit: false); self.openSnowman(session); return
+                    ticket.resolve(commit: false); self.selectSolo(false); self.openSnowman(session); return
                 }
                 self.request(type: .snowman_update, sessionID: session.sessionID,
                     mutation: SnowmanMutation(part: part, value: 1, clock: session.nextClock), openAfter: true, ticket: ticket)
-            })
-        ]), ActionSheetItemGroup(items: [ActionSheetButtonItem(title: "Отмена — вернуть снег", color: .accent, action: { [weak sheet] in sheet?.dismissAnimated(); ticket.resolve(commit: false) })])])
+            }))
+        }
+        sheet.setItemGroups([ActionSheetItemGroup(items: items), ActionSheetItemGroup(items: [ActionSheetButtonItem(title: "Отмена — вернуть снег", color: .accent, action: { [weak sheet] in sheet?.dismissAnimated(); ticket.resolve(commit: false) })])])
         host?.present(sheet, in: .window(.root))
     }
 
     private func request(type: WinterEvent.Kind, sessionID: String? = nil, mutation: SnowmanMutation? = nil, openAfter: Bool = false, ticket: SnowMoldTicket? = nil) {
+        if type != .snowball { self.selectSolo(false) }
         let title = type.label
         let serverMode = WinterSyncHub.shared.owns(accountID: self.accountID, peerID: self.peerID.toInt64())
-        let body = serverMode ? self.text("Передать зимнее действие через подключённую пару Winter Sync? При недоступности сервиса действие останется в очереди. Техническое сообщение Telegram не отправляется.", "Send through your paired Winter Sync service? Offline actions stay queued; no technical Telegram message is sent.") : self.text("В этот чат будет отправлено обычное видимое сообщение с зимним действием. Получатель увидит эффект в совместимом Telegram Snow. Отправить?", "An ordinary visible winter-action message will be sent to this chat. The recipient sees its effect in a compatible Telegram Snow. Send?")
+        let body = serverMode ? self.text("Передать зимнее действие через подключённую пару Winter Sync? При недоступности сервиса действие останется в очереди. Техническое сообщение Telegram не отправляется.", "Send through your paired Winter Sync service? Offline actions stay queued; no technical Telegram message is sent.") : self.text("В чат отправится один эмодзи со ссылкой зимнего действия. Ссылка содержит его параметры; совместимый Telegram Snow прочитает их. Отправить?", "Send one visible emoji link? The link contains the action data for compatible Telegram Snow clients.")
         self.confirm(title: title, body: body, onCancel: { ticket?.resolve(commit: false) }) { [weak self] in
             guard let self else { return }
             let settings = SnowEffectPreferences.shared.settings
@@ -331,13 +385,24 @@ final class WinterChatInteractions: NSObject {
         }
         let controller = WinterSnowmanHostController(context: self.context, session: session, onMutation: { [weak self] mutation in
             guard let self, let sessionID = self.snowmanSessionID else { return }
+            if session.isSolo {
+                let body = [SnowmanPart.bottom, .middle, .head].contains(mutation.part)
+                let ticket = body ? self.reserveBall?() : nil
+                if body && ticket == nil { self.notice("Нужно ещё снега: вернитесь в чат и дайте ему накопиться над панелью."); return }
+                let result = WinterEventTransport.shared.updateSoloSession(accountID: self.accountID, peerID: self.peerID.toInt64(), sessionID: sessionID, mutation: mutation)
+                ticket?.resolve(commit: result != nil)
+                if result == nil { self.notice("Состояние уже изменилось. Попробуйте ещё раз; снег возвращён.") }
+                return
+            }
             guard ![SnowmanPart.bottom, .middle, .head].contains(mutation.part) else {
                 self.notice("Три шара лепятся из сугроба над строкой ввода."); return
             }
             self.request(type: .snowman_update, sessionID: sessionID, mutation: mutation)
         }, onComplete: { [weak self] in
             guard let self, let sessionID = self.snowmanSessionID else { return }
-            self.request(type: .snowman_complete, sessionID: sessionID)
+            if session.isSolo {
+                _ = WinterEventTransport.shared.updateSoloSession(accountID: self.accountID, peerID: self.peerID.toInt64(), sessionID: sessionID, complete: true)
+            } else { self.request(type: .snowman_complete, sessionID: sessionID) }
         }, onExport: { [weak self] image in self?.export(image) })
         self.snowmanHost = controller
         if let navigation = self.host?.navigationController as? NavigationController { navigation.pushViewController(controller) }

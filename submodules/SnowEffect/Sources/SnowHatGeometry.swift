@@ -1,4 +1,16 @@
-import UIKit
+import Foundation
+import CoreGraphics
+
+public enum SnowHatLayout {
+    public static let photoScale: CGFloat = 0.78
+    public static func photoFrame(in allocation: CGRect, decorated: Bool) -> CGRect {
+        let scale: CGFloat = decorated ? self.photoScale : 1
+        return CGRect(x: allocation.minX + allocation.width * (1 - scale) / 2, y: allocation.minY + allocation.height * (1 - scale), width: allocation.width * scale, height: allocation.height * scale)
+    }
+    public static func crownBounds(in allocation: CGRect) -> CGRect {
+        CGRect(x: allocation.minX, y: allocation.minY, width: allocation.width, height: allocation.height * 0.58)
+    }
+}
 
 /// Geometry is relative to the actual avatar square, never the atlas or a screen.
 /// The alpha bounds ignore <=16/255 encoding noise; a 3px guard retains soft fur edges.
@@ -40,17 +52,17 @@ enum SnowHatGeometry {
         return Artwork(crop: bounds[hatID - 1].insetBy(dx: -3, dy: -3), brim: brims[hatID - 1], width: widths[hatID - 1])
     }
 
-    static func placement(configuration: SnowHatConfiguration, avatarBounds: CGRect, imageSize: CGSize) -> Placement? {
+    static func placement(configuration: SnowHatConfiguration, avatarBounds: CGRect, imageSize: CGSize, confinement: CGRect? = nil) -> Placement? {
         guard configuration.isValid, imageSize.width > 0, imageSize.height > 0,
               let artwork = artwork(hatID: configuration.hatID) else { return nil }
         let diameter = min(avatarBounds.width, avatarBounds.height)
         guard diameter > 0 else { return nil }
-        // Keep every rotated accessory inside the upper avatar allocation. This protects
-        // navigation buttons, neighbouring rows, story rings and bottom online badges.
-        let envelope = CGRect(x: avatarBounds.midX - diameter * 0.46, y: avatarBounds.midY - diameter * 0.48, width: diameter * 0.92, height: diameter * 0.66)
+        // Preview can extend above the actual circle. Compact hosts reserve a crown
+        // inside their existing allocation and supply the reduced photo's real frame.
+        let envelope = confinement ?? CGRect(x: avatarBounds.midX - diameter * 0.60, y: avatarBounds.minY - diameter * 0.72, width: diameter * 1.20, height: diameter * 1.44)
         let angle = CGFloat(configuration.rotation)
         let cosine = cos(angle), sine = sin(angle)
-        var width = diameter * artwork.width * CGFloat(configuration.scale)
+        var width = diameter * artwork.width * 1.12 * CGFloat(configuration.scale)
         var height = width * imageSize.height / imageSize.width
         let rotatedWidth = abs(cosine) * width + abs(sine) * height
         let rotatedHeight = abs(sine) * width + abs(cosine) * height
@@ -60,7 +72,7 @@ enum SnowHatGeometry {
         let halfHeight = (abs(sine) * width + abs(cosine) * height) / 2
         let anchor = CGPoint(x: (artwork.brim.x - 0.5) * width, y: (artwork.brim.y - 0.5) * height)
         // Preserve stored normalized deltas; -0.4 is the editor's original neutral Y.
-        let desired = CGPoint(x: avatarBounds.midX + CGFloat(configuration.offsetX) * diameter - (anchor.x * cosine - anchor.y * sine), y: avatarBounds.midY - diameter * 0.18 + CGFloat(configuration.offsetY + 0.4) * diameter - (anchor.x * sine + anchor.y * cosine))
+        let desired = CGPoint(x: avatarBounds.midX + CGFloat(configuration.offsetX) * diameter - (anchor.x * cosine - anchor.y * sine), y: avatarBounds.minY + diameter * 0.08 + CGFloat(configuration.offsetY + 0.4) * diameter - (anchor.x * sine + anchor.y * cosine))
         let center = CGPoint(x: min(envelope.maxX - halfWidth, max(envelope.minX + halfWidth, desired.x)), y: min(envelope.maxY - halfHeight, max(envelope.minY + halfHeight, desired.y)))
         return Placement(size: CGSize(width: width, height: height), center: center)
     }

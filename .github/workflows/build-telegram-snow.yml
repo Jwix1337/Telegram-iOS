@@ -58,7 +58,18 @@ jobs:
       - name: Typecheck the complete SnowEffect module against the iOS SDK
         run: python3 build-system/SnowEffect/typecheck_snow_effect.py
       - run: python3 build-system/SnowEffect/test_winter_models.py
-      - run: swiftc -frontend -parse submodules/SnowEffect/Sources/*.swift submodules/TelegramUI/Sources/WinterChatInteractions.swift
+      - name: Parse Winter UI integration with the native Swift frontend
+        run: |
+          swiftc -frontend -parse submodules/SnowEffect/Sources/*.swift \
+            submodules/AvatarNode/Sources/AvatarNode.swift \
+            submodules/ChatListUI/Sources/Node/ChatListItem.swift \
+            submodules/PeerInfoAvatarListNode/Sources/PeerInfoAvatarListNode.swift \
+            submodules/SettingsUI/Sources/Themes/SnowHatPublishing.swift \
+            submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift \
+            submodules/TelegramUI/Sources/AppDelegate.swift \
+            submodules/TelegramUI/Sources/ChatController.swift \
+            submodules/TelegramUI/Sources/ChatControllerNode.swift \
+            submodules/TelegramUI/Sources/WinterChatInteractions.swift
   device:
     if: ${{ !inputs.models_only }}
     runs-on: ${{ inputs.runner || 'xcode-27' }}

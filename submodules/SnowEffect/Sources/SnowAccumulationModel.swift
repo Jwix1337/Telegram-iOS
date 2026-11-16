@@ -16,7 +16,7 @@ struct SnowAccumulationModel {
                 result + exp(-pow((x - center) / 0.12, 2.0)) * 0.22
             }
             let taper = min(1.0, min(x, 1.0 - x) * 12.0)
-            return min(1.0, 0.35 + mounds + Double.random(in: 0.0 ... 0.12)) * taper
+            return min(1.0, 0.18 + mounds + Double.random(in: 0.0 ... 0.06)) * taper
         }
     }
 

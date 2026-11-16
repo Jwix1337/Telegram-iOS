@@ -33,6 +33,10 @@ public enum SnowHatAssets {
 /// A single noninteractive overlay. Its layer also works in layer-backed AvatarNodes.
 /// Peer photos remain untouched; size and normalized transforms are resolved at presentation time.
 public final class SnowHatOverlayView: UIView {
+    public var avatarFrame: CGRect? { didSet { self.setNeedsLayout() } }
+    public var confinementBounds: CGRect? { didSet { self.setNeedsLayout() } }
+    public var onConfigurationChanged: ((Bool) -> Void)?
+    public var hasDecoration: Bool { self.configuration != nil }
     private let imageLayer = CALayer()
     private var accountID: Int64?
     private var peerID: Int64?
@@ -94,6 +98,7 @@ public final class SnowHatOverlayView: UIView {
         let valid = configuration.flatMap { $0.isValid && $0.enabled ? $0 : nil }
         guard self.configuration != valid else { return }
         self.configuration = valid
+        self.onConfigurationChanged?(valid != nil)
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         self.imageLayer.contents = valid.flatMap { SnowHatAssets.image(for: $0.hatID)?.cgImage }
@@ -107,7 +112,7 @@ public final class SnowHatOverlayView: UIView {
         super.layoutSubviews()
         guard let configuration = self.configuration,
               let image = SnowHatAssets.image(for: configuration.hatID), image.size.width > 0.0 else { return }
-        guard let placement = SnowHatGeometry.placement(configuration: configuration, avatarBounds: self.bounds, imageSize: image.size) else { return }
+        guard let placement = SnowHatGeometry.placement(configuration: configuration, avatarBounds: self.avatarFrame ?? self.bounds, imageSize: image.size, confinement: self.confinementBounds) else { return }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         self.imageLayer.bounds = CGRect(origin: .zero, size: placement.size)

@@ -212,6 +212,7 @@ public final class PeerInfoAvatarListItemNode: ASDisplayNode {
     private let peer: EnginePeer
     public let imageNode: TransformImageNode
     private let snowHatOverlay = SnowHatOverlayView(frame: .zero)
+    private var snowHatLayoutSize: CGSize?
     private var videoNode: UniversalVideoNode?
     private var videoContent: NativeVideoContent?
     private var videoStartTimestamp: Double?
@@ -338,6 +339,10 @@ public final class PeerInfoAvatarListItemNode: ASDisplayNode {
             }
         }
         self.layer.addSublayer(self.hierarchyTrackingLayer)
+        self.snowHatOverlay.onConfigurationChanged = { [weak self] _ in
+            guard let self, let size = self.snowHatLayoutSize else { return }
+            self.update(size: size, transition: .immediate)
+        }
         self.snowHatOverlay.layer.zPosition = 0.01
         self.layer.addSublayer(self.snowHatOverlay.layer)
     }
@@ -587,13 +592,18 @@ public final class PeerInfoAvatarListItemNode: ASDisplayNode {
     }
     
     func update(size: CGSize, transition: ContainedViewLayoutTransition) {
-        let imageSize = CGSize(width: min(size.width, size.height), height: min(size.width, size.height))
+        self.snowHatLayoutSize = size
+        let diameter = min(size.width, size.height)
+        let scale: CGFloat = self.snowHatOverlay.hasDecoration ? SnowHatLayout.photoScale : 1
+        let imageSize = CGSize(width: diameter * scale, height: diameter * scale)
         let makeLayout = self.imageNode.asyncLayout()
         let applyLayout = makeLayout(TransformImageArguments(corners: ImageCorners(), imageSize: imageSize, boundingSize: imageSize, intrinsicInsets: UIEdgeInsets()))
         let _ = applyLayout()
-        let imageFrame = CGRect(origin: CGPoint(x: floor((size.width - imageSize.width) / 2.0), y: floor((size.height - imageSize.height) / 2.0)), size: imageSize)
+        let imageFrame = CGRect(origin: CGPoint(x: floor((size.width - imageSize.width) / 2.0), y: floor((size.height - diameter) / 2.0 + diameter - imageSize.height)), size: imageSize)
         transition.updateFrame(node: self.imageNode, frame: imageFrame)
-        transition.updateFrame(view: self.snowHatOverlay, frame: imageFrame)
+        transition.updateFrame(view: self.snowHatOverlay, frame: CGRect(x: (size.width - diameter) / 2, y: (size.height - diameter) / 2, width: diameter, height: diameter))
+        self.snowHatOverlay.avatarFrame = CGRect(x: diameter * (1 - scale) / 2, y: diameter * (1 - scale), width: imageSize.width, height: imageSize.height)
+        self.snowHatOverlay.confinementBounds = SnowHatLayout.crownBounds(in: CGRect(x: 0, y: 0, width: diameter, height: diameter))
         self.snowHatOverlay.layoutIfNeeded()
         
         transition.updateFrame(node: self.statusNode, frame: CGRect(origin: CGPoint(x: floor((size.width - 50.0) / 2.0), y: floor((size.height - 50.0) / 2.0)), size: CGSize(width: 50.0, height: 50.0)))

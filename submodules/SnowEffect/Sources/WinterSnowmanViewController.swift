@@ -72,7 +72,7 @@ public final class WinterSnowmanViewController: UIViewController {
         let header = UIStackView()
         header.axis = .horizontal
         header.spacing = 12.0
-        header.addArrangedSubview(self.label(self.text("Наш снеговик", "Our Snowman"), style: .title2))
+        header.addArrangedSubview(self.label(self.session.isSolo ? self.text("Мой снеговик", "My Snowman") : self.text("Наш снеговик", "Our Snowman"), style: .title2))
         let close = UIButton(type: .system)
         close.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
         close.accessibilityLabel = self.text("Закрыть", "Close")
@@ -97,7 +97,7 @@ public final class WinterSnowmanViewController: UIViewController {
         self.addButton.addTarget(self, action: #selector(self.addPart), for: .touchUpInside)
         content.addArrangedSubview(self.addButton)
         let boxTitle = self.label("Бесплатная Зимняя коробка", style: .headline)
-        let boxNote = self.label("Улыбка и пуговицы появляются вместе с головой. API v1 добавляет детали по порядку: глаза, морковка, веточки, шарф, шапка.", style: .footnote)
+        let boxNote = self.label("Улыбка и пуговицы появляются вместе с головой. Добавьте глаза, морковку, веточки, шарф и шапку.", style: .footnote)
         content.addArrangedSubview(boxTitle); content.addArrangedSubview(boxNote)
         boxViews += [boxTitle, boxNote]
         for (index, title) in ["Глаза", "Морковка", "Две веточки", "Шарф", "Шапка"].enumerated() {
@@ -198,7 +198,7 @@ public final class WinterSnowmanViewController: UIViewController {
         self.canvas.update(session: self.session, animated: animated)
         let count = self.stages.filter { self.session.contains($0) }.count
         self.canvas.accessibilityLabel = self.text("Снеговик: деталей \(count) из 8", "Snowman: \(count) of 8 details")
-        self.status.text = !self.session.accepted ? self.text("Ожидаем принятия приглашения.", "Waiting for the invitation to be accepted.") : (self.session.completed ? self.text("Снеговик готов!", "Your snowman is complete!") : self.text("Вы оба можете добавлять детали. Готово: \(count) из 8.", "You can both add details. Added: \(count) of 8."))
+        self.status.text = !self.session.accepted ? self.text("Ожидаем принятия приглашения.", "Waiting for the invitation to be accepted.") : (self.session.completed ? self.text("Снеговик готов!", "Your snowman is complete!") : self.text("Добавлено деталей: \(count) из 8.", "Added: \(count) of 8 details."))
         if let next = self.stages.first(where: { !self.session.contains($0) }) {
             self.addButton.setTitle(self.text("Добавить: ", "Add: ") + self.name(next), for: .normal)
         } else {
@@ -212,8 +212,8 @@ public final class WinterSnowmanViewController: UIViewController {
             let part = [SnowmanPart.eyes, .nose, .arms, .scarf, .hat][button.tag]
             button.isEnabled = editable && boxOpen && next == part
         }
-        self.addButton.isEnabled = editable && boxOpen && !self.session.isBuilt
-        if !boxOpen { self.addButton.setTitle("Слепите три шара из накопленного снега", for: .normal) }
+        self.addButton.isEnabled = editable && (boxOpen || self.session.isSolo) && !self.session.isBuilt
+        if !boxOpen && !self.session.isSolo { self.addButton.setTitle("Слепите три шара из накопленного снега", for: .normal) }
         self.completeButton.isEnabled = editable && self.session.isBuilt
         self.exportButton.isEnabled = self.session.isBuilt
         for button in self.colorButtons {
@@ -256,7 +256,7 @@ public final class WinterSnowmanViewController: UIViewController {
     }
 
     @objc private func addPart() {
-        guard session.contains(.head), let next = self.stages.first(where: { !self.session.contains($0) }) else { return }
+        guard session.isSolo || session.contains(.head), let next = self.stages.first(where: { !self.session.contains($0) }) else { return }
         self.request(next, value: 1)
     }
 

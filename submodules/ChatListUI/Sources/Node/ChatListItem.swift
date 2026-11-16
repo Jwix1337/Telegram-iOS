@@ -1879,6 +1879,13 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
         self.separatorNode.isLayerBacked = true
         
         super.init(layerBacked: false, rotated: false, seeThrough: false)
+        self.avatarNode.snowHatLayoutChanged = { [weak self] circle in
+            guard let self else { return }
+            var frame = self.onlineNode.frame
+            frame.origin.x = circle.maxX - frame.width - 2
+            frame.origin.y = circle.maxY - frame.height - 2
+            self.onlineNode.frame = frame
+        }
         
         self.isAccessibilityElement = true
         
@@ -4659,10 +4666,11 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     }
                     
                     let onlineFrame: CGRect
+                    let onlineCircle = strongSelf.avatarNode.snowHatPhotoFrame
                     if onlineIsVoiceChat {
-                        onlineFrame = CGRect(origin: CGPoint(x: avatarFrame.width - onlineLayout.width + 1.0 - UIScreenPixel, y: avatarFrame.height - onlineLayout.height + 1.0 - UIScreenPixel), size: onlineLayout)
+                        onlineFrame = CGRect(origin: CGPoint(x: onlineCircle.maxX - onlineLayout.width + 1.0 - UIScreenPixel, y: onlineCircle.maxY - onlineLayout.height + 1.0 - UIScreenPixel), size: onlineLayout)
                     } else {
-                        onlineFrame = CGRect(origin: CGPoint(x: avatarFrame.width - onlineLayout.width - 2.0, y: avatarFrame.height - onlineLayout.height - 2.0), size: onlineLayout)
+                        onlineFrame = CGRect(origin: CGPoint(x: onlineCircle.maxX - onlineLayout.width - 2.0, y: onlineCircle.maxY - onlineLayout.height - 2.0), size: onlineLayout)
                     }
                     transition.updateFrame(node: strongSelf.onlineNode, frame: onlineFrame)
                     

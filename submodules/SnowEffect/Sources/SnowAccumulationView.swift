@@ -17,6 +17,46 @@ public final class SnowAccumulationView: UIView, UIGestureRecognizerDelegate {
         didSet { if oldValue != self.isEffectVisible { self.refresh() } }
     }
 
+    private var surfaces: [CGRect] = []
+    private var surfaceRadii: [CGFloat] = []
+    private var overflowRadii: [CGFloat]?
+    private var overflowFrames: [CGRect]?
+    private var edgeEmitters: [CAEmitterLayer] = []
+    private static let edgeTexture: CGImage? = {
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4)).image { context in
+            UIColor.white.setFill()
+            context.cgContext.fillEllipse(in: CGRect(x: 0.5, y: 0.5, width: 3, height: 3))
+        }
+        return image.cgImage
+    }()
+
+    public func setSurfaces(_ frames: [CGRect], cornerRadii: [CGFloat] = []) {
+        var valid: [CGRect] = [], radii: [CGFloat] = []
+        for (index, frame) in frames.enumerated() {
+            let radius = cornerRadii.indices.contains(index) ? cornerRadii[index] : min(20, min(frame.width, frame.height) / 2)
+            guard !frame.isEmpty, frame.width.isFinite, frame.height.isFinite, frame.minY.isFinite,
+                  frame.minX >= 0, frame.maxX <= self.bounds.width + 0.5,
+                  radius.isFinite, radius >= 0 else { continue }
+            valid.append(frame)
+            radii.append(min(radius, min(frame.width, frame.height) / 2))
+        }
+        guard valid != self.surfaces || radii != self.surfaceRadii else { return }
+        self.surfaces = valid; self.surfaceRadii = radii
+        self.draw(animated: false)
+    }
+
+    /// The same transactional reservation is used by molding gestures and solo build buttons.
+    public func reserveSnowball() -> SnowMoldTicket? {
+        guard self.applicationIsActive, SnowEffectPreferences.shared.settings.accumulationEnabled, SnowEffectPreferences.shared.settings.isActive(), let id = self.model.reserveBall() else { return nil }
+        self.draw(animated: true)
+        return SnowMoldTicket { [weak self] commit in
+            guard let self else { return }
+            self.model.finishBall(id, commit: commit)
+            self.draw(animated: true)
+            self.refresh()
+        }
+    }
+
     private let bank = CAShapeLayer()
     private let debris = CALayer()
     private var model = SnowAccumulationModel()
@@ -42,7 +82,7 @@ public final class SnowAccumulationView: UIView, UIGestureRecognizerDelegate {
         self.clipsToBounds = false
         self.isAccessibilityElement = false
         self.accessibilityElementsHidden = true
-        self.bank.fillColor = UIColor(white: 1.0, alpha: 0.94).cgColor
+        self.bank.fillColor = UIColor(white: 1.0, alpha: 0.90).cgColor
         self.bank.shadowColor = UIColor(white: 0.35, alpha: 1.0).cgColor
         self.bank.shadowOpacity = 0.12
         self.bank.shadowRadius = 1.0
@@ -124,6 +164,10 @@ public final class SnowAccumulationView: UIView, UIGestureRecognizerDelegate {
             self.lastGrowthTime = nil
             self.bank.removeAllAnimations()
             self.removeDebris()
+            self.edgeEmitters.forEach { $0.birthRate = 0; $0.removeFromSuperlayer() }
+            self.edgeEmitters.removeAll()
+            self.overflowFrames = nil
+            self.overflowRadii = nil
         } else {
             if self.drawnSize != self.bounds.size || self.drawnMaximum != settings.maximumSnowHeight.rawValue {
                 self.draw(animated: false)
@@ -137,6 +181,7 @@ public final class SnowAccumulationView: UIView, UIGestureRecognizerDelegate {
             }
         }
 
+        self.updateOverflow()
         self.seasonTimer?.invalidate()
         self.seasonTimer = nil
         if visible && settings.enabled && settings.seasonal {
@@ -169,25 +214,21 @@ public final class SnowAccumulationView: UIView, UIGestureRecognizerDelegate {
 
     private func draw(animated: Bool) {
         let maximum = SnowEffectPreferences.shared.settings.maximumSnowHeight.rawValue
-        let heights = self.model.heights(maximum: maximum)
-        let baseline = self.bounds.height
+        let heights = self.model.heights(maximum: maximum * 0.65)
         let path = UIBezierPath()
-        path.move(to: CGPoint(x: 0.0, y: baseline))
-        let points = heights.enumerated().map { index, height in
-            CGPoint(x: self.bounds.width * CGFloat(index) / CGFloat(heights.count - 1), y: baseline - CGFloat(height))
-        }
-        // Each control point is within the height cap; quadratic segments cannot overshoot it.
-        if let first = points.first {
-            path.addLine(to: first)
-            for index in 1 ..< points.count {
-                let previous = points[index - 1]
-                let current = points[index]
-                path.addQuadCurve(to: CGPoint(x: (previous.x + current.x) * 0.5, y: (previous.y + current.y) * 0.5), controlPoint: previous)
+        for (index, surface) in self.surfaces.enumerated() {
+            guard let samples = SnowAccumulationSurface.samples(frame: surface, heights: heights, cornerRadius: self.surfaceRadii[index]) else { continue }
+            let upper = samples.upper, lower = samples.lower
+            guard let first = upper.first else { continue }
+            path.move(to: first)
+            for index in 1..<upper.count {
+                let previous = upper[index - 1], point = upper[index]
+                path.addQuadCurve(to: CGPoint(x: (previous.x + point.x) / 2, y: (previous.y + point.y) / 2), controlPoint: previous)
             }
-            if let last = points.last { path.addLine(to: last) }
+            if let last = upper.last { path.addLine(to: last) }
+            for point in lower.reversed() { path.addLine(to: point) }
+            path.close()
         }
-        path.addLine(to: CGPoint(x: self.bounds.width, y: baseline))
-        path.close()
         let oldPath = self.bank.presentation()?.path ?? self.bank.path
         let oldShadowPath = self.bank.presentation()?.shadowPath ?? self.bank.shadowPath
         CATransaction.begin()
@@ -199,8 +240,8 @@ public final class SnowAccumulationView: UIView, UIGestureRecognizerDelegate {
             let animation = CABasicAnimation(keyPath: "path")
             animation.fromValue = oldPath
             animation.toValue = path.cgPath
-            animation.duration = 1.0
-            animation.timingFunction = CAMediaTimingFunction(name: .linear)
+            animation.duration = 1.1
+            animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             self.bank.add(animation, forKey: "growth")
             let shadow = CABasicAnimation(keyPath: "shadowPath")
             shadow.fromValue = oldShadowPath
@@ -214,6 +255,7 @@ public final class SnowAccumulationView: UIView, UIGestureRecognizerDelegate {
         }
         self.drawnSize = self.bounds.size
         self.drawnMaximum = maximum
+        self.updateOverflow()
     }
 
     public override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
@@ -229,7 +271,13 @@ public final class SnowAccumulationView: UIView, UIGestureRecognizerDelegate {
             }
             ancestor = view.superview
         }
-        return path.contains(point) || (onMold != nil && point.y >= bounds.height - 4 && point.y < bounds.height)
+        if path.contains(point) { return true }
+        // A narrow bare top edge remains moldable while the first flakes settle.
+        // Never extend this target across the composer or a button's centre.
+        return self.onMold != nil && self.surfaces.enumerated().contains { index, surface in
+            let inset = self.surfaceRadii[index] / 2
+            return CGRect(x: surface.minX + inset, y: surface.minY + 21, width: max(0, surface.width - inset * 2), height: 5).contains(point)
+        }
     }
 
     public override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
@@ -253,18 +301,12 @@ public final class SnowAccumulationView: UIView, UIGestureRecognizerDelegate {
         case .ended:
             let end = gesture.location(in: self)
             guard hypot(end.x - moldStart.x, end.y - moldStart.y) >= 12 else { return }
-            guard let id = model.reserveBall() else {
+            guard let ticket = self.reserveSnowball() else {
                 hint.text = "Ещё немного снега…"
                 hint.frame = CGRect(x: max(0, bounds.midX - 90), y: -30, width: 180, height: 26)
                 hint.isHidden = false
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) { [weak self] in self?.hint.isHidden = true }
                 return
-            }
-            draw(animated: false)
-            let ticket = SnowMoldTicket { [weak self] commit in
-                guard let self else { return }
-                self.model.finishBall(id, commit: commit)
-                self.draw(animated: false); self.refresh()
             }
             onMold?(ticket)
         default: break // recognizer cancellation never reserves any snow
@@ -339,6 +381,42 @@ public final class SnowAccumulationView: UIView, UIGestureRecognizerDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.1, execute: work)
         self.lastGrowthTime = CACurrentMediaTime()
         self.refresh()
+    }
+
+    private func updateOverflow() {
+        let process = ProcessInfo.processInfo
+        let enabled = self.running && self.model.isFull && !process.isLowPowerModeEnabled && process.thermalState != .serious && !UIAccessibility.isReduceMotionEnabled
+        let frames = enabled ? self.surfaces : []
+        let radii = enabled ? self.surfaceRadii : []
+        guard self.overflowFrames != frames || self.overflowRadii != radii else { return }
+        self.overflowFrames = frames
+        self.overflowRadii = radii
+        self.edgeEmitters.forEach { $0.birthRate = 0; $0.removeFromSuperlayer() }
+        self.edgeEmitters.removeAll()
+        guard enabled else { return }
+        for (index, surface) in self.surfaces.enumerated() {
+            for side in [CGFloat(-1), 1] {
+                let emitter = CAEmitterLayer()
+                emitter.emitterPosition = CGPoint(x: side < 0 ? surface.minX + 4 : surface.maxX - 4, y: surface.minY + 24 + self.surfaceRadii[index] * 0.36)
+                emitter.seed = UInt32.random(in: 1...UInt32.max)
+                emitter.emitterSize = CGSize(width: 3, height: 2)
+                emitter.emitterShape = .line
+                let cell = CAEmitterCell()
+                cell.contents = Self.edgeTexture
+                cell.birthRate = 1.8
+                cell.lifetime = 0.75; cell.lifetimeRange = 0.15
+                cell.velocity = 10; cell.velocityRange = 5
+                cell.emissionLongitude = side < 0 ? .pi * 0.75 : .pi * 0.25
+                cell.emissionRange = 0.18
+                cell.xAcceleration = side * 14; cell.yAcceleration = 80
+                cell.scale = 0.85; cell.scaleRange = 0.35
+                cell.alphaSpeed = -1.25
+                cell.spin = 0.3; cell.spinRange = 1
+                emitter.emitterCells = [cell]
+                self.layer.addSublayer(emitter)
+                self.edgeEmitters.append(emitter)
+            }
+        }
     }
 
     private func removeDebris() {

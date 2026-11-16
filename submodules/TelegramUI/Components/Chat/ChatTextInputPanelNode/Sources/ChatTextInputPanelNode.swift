@@ -208,6 +208,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
 
     /// A zero-height decoration host at the actual field's top edge; it never intercepts field touches.
     public let snowAccumulationAnchorView = UIView()
+    public private(set) var snowAccumulationSurfaces: [CGRect] = []
+    public private(set) var snowAccumulationCornerRadii: [CGFloat] = []
     // Bubble-free mode only: the "next channel" island growing out of the text field, while a topic is pulled up.
     private var overscrollIsland: ChatOverscrollIslandHost?
     private let accessoryPanelContainer: UIView
@@ -3347,7 +3349,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         transition.updateFrame(view: self.accessoryPanelContainer, frame: CGRect(origin: CGPoint(), size: textInputContainerBackgroundFrame.size))
         transition.updateFrame(view: self.textInputContainerBackgroundView, frame: textInputContainerBackgroundFrame)
-        transition.updateFrame(view: self.snowAccumulationAnchorView, frame: CGRect(origin: textInputContainerBackgroundFrame.origin, size: CGSize(width: textInputContainerBackgroundFrame.width, height: 0.0)))
+        transition.updateFrame(view: self.snowAccumulationAnchorView, frame: CGRect(origin: .zero, size: CGSize(width: width, height: 0.0)))
         
         self.updateCounterTextNode(backgroundSize: textInputContainerBackgroundFrame.size, transition: transition)
         
@@ -3812,6 +3814,14 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
 
         let attachmentButtonFrame = CGRect(origin: CGPoint(x: attachmentButtonX, y: textInputFrame.maxY - attachmentPillHeight), size: CGSize(width: 40.0, height: attachmentPillHeight))
         attachmentButtonX += 40.0 + 6.0
+        self.snowAccumulationSurfaces = [textInputContainerBackgroundFrame]
+        self.snowAccumulationCornerRadii = [isAgentLayout ? 20 : floor(minimalInputHeight * 0.5)]
+        if !isAgentLayout {
+            if self.attachmentButtonBackground.alpha > 0.01 { self.snowAccumulationSurfaces.append(attachmentButtonFrame); self.snowAccumulationCornerRadii.append(20) }
+            let rightFrame = mediaActionButtonsHidden ? sendActionButtonsFrame : mediaActionButtonsFrame
+            self.snowAccumulationSurfaces.append(rightFrame)
+            self.snowAccumulationCornerRadii.append(min(rightFrame.width, rightFrame.height) / 2)
+        }
         self.attachmentButtonBackground.update(size: attachmentButtonFrame.size, cornerRadius: 40.0 * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: defaultGlassTintColor, isInteractive: true, transition: ComponentTransition(transition))
 
         transition.updateFrame(layer: self.attachmentButtonBackground.layer, frame: attachmentButtonFrame)

@@ -1,3 +1,23 @@
+# Исправления по первому тесту iPhone — 2026-11-16 (проверки ожидаются)
+
+Один агент, исходное дерево чистое (ad38441), ветка codex/winter-validation. Пользователь подтвердил реальный запуск IPA#10 на iPhone и сообщил: снег выходит за края/слишком сплошной; нужен снег над скрепкой/голосом и осыпание; шапки оказались внутри фото; JSON-сообщения нежелательны; скрепка сразу завершает приложение; нельзя строить одному. Скриншоты — реальные пользовательские наблюдения, не наши UI-тесты.
+
+Реализуемые правки: SnowAccumulationSurface повторяет округлую верхнюю дугу реальных трёх CGRect из ChatTextInputPanelNode; отдельные замкнутые капы без общей прямой полосы, высота мягче, easing роста. Full bank использует6ограниченных CAEmitterLayer с гравитацией/разными seeds; без physics engine/новых UIView/полного-bank таймера. Эмиттеры отключаются в фоне/LowPower/ReduceMotion/thermal и пересоздаются только при изменении поверхности/режима.
+
+SnowHatLayout выделяет под фото78% прежнего прямоугольника, снизу, оставляя место короне. Общая геометрия принимает реальный photoFrame и отдельный crownBounds. Фото/видео/истории масштабируются вместе, online badge привязан к новому кругу. Галерея текущего профиля обновляет картинку по той же схеме; preview оставляет физический размер фото и место сверху. Исходные10ресурсов/ID/публикация и локальные account+peer overrides сохранены, настоящие фотографии не меняются. Статический диагностический макет /tmp/winter-hat-layout-diagnostic.jpg просмотрен в2темах: это НЕ screenshot/проверка UIKit или iPhone.
+
+Без серверной пары legacy WinterEvent v1 передаётся обычным видимым emoji TextUrl-сообщением (❄️/⛄/🎄), данные явно находятся в app-local telegram-snow://winter/v1 ссылке; подтверждение отправки объясняет это. Старый raw v1 приём сохранён, новый отправитель JSON-текст не публикует. Message author/destination/timestamp/forward/replay/rate guards сохраняются; payload<=4096B/url<=6000B. URL taps только открывают приложение, никогда не применяют событие (источник не аутентифицирован); зарегистрирован собственный scheme. Активный WinterSync остаётся эксклюзивным и не дублирует Telegram сообщения. Сервер/API/VPS/MTProto не менялись.
+
+Solo: отдельный SnowEffect.soloSnowman.v1.<account>.<peer> ключ, без outbox/приглашения/сервера; accepted-local session c равными IDs никогда не становится валидным wire event. Этапы/10шапок/шарфы/экспорт прежние. Шары через жест либо кнопку личного редактора расходуют ту же SnowMoldTicket reservation, отмена/повтор защищены. Есть solo в Saved Messages; локальный/совместный режимы и данные раздельны. Editor может использовать уже накопленный снег скрытого чата, но не запускает рост в скрытом виде.
+
+СКРЕПКА — БЛОКЕР ПОДТВЕРЖДЕНИЯ: пользователь уточнил immediate crash ещё до меню. Оригинальные privacy usage descriptions присутствуют, packager сохраняет frameworks; причина без exception/stack не доказана. Добавлены проверки видимости/реального общего UIWindow перед forwarded snow/mini hit-tests (не конвертировать detached/чужие window views). Это защита, а НЕ подтверждённое устранение вылета. Через async вопрос запрошены Exception/Termination и стек из iPhone Analytics Telegram .ips; ответа ещё нет. Оригинальную механику attachment menu/фото/файлов не отключали и не заменяли.
+
+Локально: asset checks10avatar crops и32snowman PNG PASS; diff whitespace PASS; изменённые Swift grammar PASS. AppDelegate имеет один одинаковый с HEAD unsupported tree-sitter nonisolated(unsafe), новых parser errors нет; нужен native frontend parse. Plist scheme валиден, исходные разрешения сохранены. Новые8модельных тестов:4solo/link,3placement,1surfaces; новые чистые CoreGraphics helpers добавлены в macOS model runner. UIKit test binding сохранён; дублирующие старые placement-тесты перенесены в доступный Foundation/CoreGraphics runner. XCTest/iOS SDK после новых правок пока НЕ запускались.
+
+Следующее действие: отдельный коммит/обычный push; models_only=true на закреплённом xcode-27 (SDK typecheck+46ожидаемых модельных tests+native parse UI), исправить только реальные failures. Полную IPA сборку до группировки всех проверок не запускать. Для точного исправления вылета дождаться .ips/стека. Нет simulator/iPhone recording, анимацию/производительность/скрепку не объявлять проверенными.
+
+---
+
 # IPA успешно собран — 2026-11-16, run43943288701
 
 SUCCESS: https://github.com/Jwix1337/Telegram-iOS/actions/runs/43943288701 . Реальная macOS/Xcode27.1/Bazel9.2 iPhoneOS arm64 сборка из codex/winter-validation, source7eecba51e4dc871f04285db69b95f37ddc9a8dbf. Device job19:49:41–22:06:52UTC (~2ч17мин). Платный xlarge не выбирался; сервер/VPS/master не менялись. После этой сборки изменяется только прогресс, код артефакта остаётся7eecba5.

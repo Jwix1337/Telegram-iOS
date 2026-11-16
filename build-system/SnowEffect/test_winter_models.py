@@ -15,9 +15,9 @@ def main():
         tests = package / "Tests/SnowEffectTests"
         sources.mkdir(parents=True)
         tests.mkdir(parents=True)
-        for name in ["SnowEffectSettings.swift", "SnowHatConfiguration.swift", "WinterEventTransport.swift", "WinterSyncClient.swift", "WinterSnowmanAppearance.swift", "SnowAccumulationModel.swift"]:
+        for name in ["SnowEffectSettings.swift", "SnowHatConfiguration.swift", "WinterEventTransport.swift", "WinterSyncClient.swift", "WinterSnowmanAppearance.swift", "SnowAccumulationModel.swift", "SnowHatGeometry.swift", "SnowAccumulationSurface.swift"]:
             shutil.copyfile(module / "Sources" / name, sources / name)
-        for name in ["SnowHatTests.swift", "WinterEventTests.swift", "WinterSyncClientTests.swift", "WinterSnowmanAppearanceTests.swift", "SnowAccumulationTests.swift"]:
+        for name in ["SnowHatTests.swift", "WinterEventTests.swift", "WinterSyncClientTests.swift", "WinterSnowmanAppearanceTests.swift", "SnowAccumulationTests.swift", "WinterSoloAndLinkTests.swift", "SnowHatPlacementTests.swift", "SnowSurfaceTests.swift"]:
             shutil.copyfile(module / "Tests" / name, tests / name)
         (package / "Package.swift").write_text('''// swift-tools-version: 5.9
 import PackageDescription
