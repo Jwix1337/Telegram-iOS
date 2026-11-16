@@ -93,7 +93,7 @@ public final class SnowHatOverlayView: UIView {
             self.apply(nil)
             return
         }
-        self.apply(SnowHatStore.shared.configuration(accountID: accountID, peerID: peerID))
+        self.apply(SnowHatStore.shared.displayConfiguration(accountID: accountID, peerID: peerID))
     }
 
     private func apply(_ configuration: SnowHatConfiguration?) {

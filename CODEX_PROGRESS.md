@@ -1,3 +1,23 @@
+# Этап4 — локальные шапки из профиля, 2026-11-16
+
+Один агент, ветка codex/winter-validation. Исходное дерево чистое; предыдущие этапы сохранены. Сервер/VPS/API/master не менялись, IPA/полная сборка не запускались.
+
+Реализовано: нативный disclosure-пункт «Зимняя шапка» в обычном профиле CloudUser без botInfo. Использован прежний каталог10шапок SnowHatSprite (без изменения PNG и ID). Существующий редактор получил отдельный локальный режим: выбор/геометрия работают с черновиком; «Без шапки» меняет черновик; только «Применить» сохраняет и закрывает, «Отмена»/крестик/back не пишут настройки. Предпросмотр на штатном AvatarNode.ContentNode: реальные фото либо штатные инициалы, без уже сохранённого overlay; подписка на данные peer обновляет фото в открытом редакторе, dispose при закрытии. Тёмная/светлая тема и существующие accessibility labels сохранены.
+
+Хранение: отдельные UserDefaults ключи SnowEffect.hatOverrides.v1.<accountID>.<peerID>; стабильные Telegram IDs, без имени/фотоURL. Disabled override маскирует опубликованную шапку. SnowHatOverlayView читает displayConfiguration (override прежде старой публикации); уведомления фильтруются account+peer. Настоящие фото и Telegram данные не меняются. Выбор локален для аккаунта на устройстве; этот путь не вызывает WinterEventTransport и не активирует серверные соединения.
+
+Семантика прежней синхронизации сохранена: собственный редактор в Settings и owner-only saveLocal/configuration остаются отдельными. Явная публикация собственного украшения использует существующий подтверждённый Winter transport (парный сервер при активной паре, иначе видимое сообщение Telegram). Локальный профильный override не публикуется и не меняет доставленную конфигурацию. Новые сообщения/API/события не добавлены; каталог/состояние шапок снеговика не используются.
+
+Изменены: SnowHatConfiguration.swift, SnowHatOverlayView.swift, SnowHatEditorViewController.swift, SnowHatTests.swift; PeerInfoScreen/BUILD, PeerInfoProfileItems.swift, новый WinterProfileHatController.swift; этот файл.
+
+Реально проверено: grammar parse6Swift-файлов без ошибок (НЕ Swift-компиляция); git diff --check; существующий atlas RGBA1536x1024 с прозрачностью, catalogfilename и10непустых crops внутри границ. Проверка сначала ошибочно требовала alpha maximum255: у исходного PNG maximum254, что допустимо; проверка уточнена, ресурс не менялся. Целевая сверка используемых ContentNode/setPeer/updateSize, subscribe, DisclosureItem и push с исходными API. Добавлен XCTest для draft/cancel без записи, apply, reopening store, account/peer isolation, disabled persistence, masking newer remote updates и сохранения owner-only publication guard. XCTest НЕ выполнен: в Linux нет Swift/Apple SDK/Xcode.
+
+Осталось: macOS typecheck/XCTest; устройство/симулятор — открыть профиль с фото и инициалами,10шапок, применение/отмена/back/снятие, повторное открытие/перезапуск, смена фотографии,2аккаунта/2пользователя; проверить посадку и отсутствие обрезания в свёрнутой/большой аватарке. Запись/оценка кадров по AGENTS.md недоступна без симулятора, визуальное качество на iPhone НЕ подтверждено. Chatlist/title hooks существовали ранее и используют общий overlay, но их интеграция/визуальная проверка в этом этапе не выполнялись (следующий этап). Нет новых подтверждений синхронизации между устройствами.
+
+Следующий конкретный шаг: macOS целевой //submodules/SnowEffect:SnowEffectTests + PeerInfoScreen compile, затем проверка профиля на устройстве и следующий этап отображения chatlist/title. Команды продолжения: git status --short; git log -1 --oneline; git diff; читать только этот раздел и указанные файлы. Обычный push после отдельного коммита, без force и без изменения master.
+
+---
+
 # Этап3 — мини-снеговик и idle-потребление, 2026-11-16
 
 Ветка codex/winter-validation, один агент, исходное дерево чистое. Сервер/VPS/сеть/master не менялись; IPA/тяжёлая сборка не запускались.

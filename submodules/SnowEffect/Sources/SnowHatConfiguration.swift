@@ -69,6 +69,36 @@ public final class SnowHatStore: NSObject {
         return self.loadAccount(accountID)[String(peerID)]
     }
 
+    /// Private decoration for this viewer. A disabled override deliberately masks a published hat.
+    public func displayConfiguration(accountID: Int64, peerID: Int64) -> SnowHatConfiguration? {
+        guard accountID > 0, peerID > 0 else { return nil }
+        self.lock.lock()
+        defer { self.lock.unlock() }
+        let key = "SnowEffect.hatOverrides.v1.\(accountID).\(peerID)"
+        if let data = self.defaults.data(forKey: key),
+           let value = try? JSONDecoder().decode(SnowHatConfiguration.self, from: data),
+           value.isValid, value.ownerID == peerID {
+            return value
+        }
+        return self.loadAccount(accountID)[String(peerID)]
+    }
+
+    /// Never enters the publication store or WinterEventTransport.
+    @discardableResult
+    public func saveOverride(_ configuration: SnowHatConfiguration, accountID: Int64, peerID: Int64) -> Bool {
+        guard accountID > 0, peerID > 0, configuration.ownerID == peerID,
+              configuration.isValid, let data = try? JSONEncoder().encode(configuration) else { return false }
+        self.lock.lock()
+        self.defaults.set(data, forKey: "SnowEffect.hatOverrides.v1.\(accountID).\(peerID)")
+        self.lock.unlock()
+        if Thread.isMainThread {
+            self.notify(accountID: accountID, peerID: peerID)
+        } else {
+            DispatchQueue.main.async { [weak self] in self?.notify(accountID: accountID, peerID: peerID) }
+        }
+        return true
+    }
+
     @discardableResult
     public func saveLocal(_ configuration: SnowHatConfiguration, accountID: Int64) -> Bool {
         guard configuration.isValid, accountID > 0, configuration.ownerID == accountID else { return false }

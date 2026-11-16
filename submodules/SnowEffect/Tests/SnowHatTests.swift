@@ -16,6 +16,35 @@ final class SnowHatTests: XCTestCase {
         try body(SnowHatStore(defaults: defaults), defaults)
     }
 
+    func testProfileOverridesPersistAndAreIsolatedFromPublicationAndOtherAccounts() throws {
+        try self.withStore { store, defaults in
+            let published = self.configuration(hatID: 2)
+            XCTAssertTrue(store.accept(messageText: try XCTUnwrap(published.messageText()), authorID: 222, accountID: 111, messageTimestamp: self.messageTimestamp))
+            var draft = published
+            draft.hatID = 9
+            // Editing/cancelling a value does not touch either store.
+            XCTAssertEqual(store.displayConfiguration(accountID: 111, peerID: 222), published)
+            XCTAssertTrue(store.saveOverride(draft, accountID: 111, peerID: 222))
+            XCTAssertEqual(store.configuration(accountID: 111, peerID: 222), published)
+            XCTAssertEqual(store.displayConfiguration(accountID: 111, peerID: 222), draft)
+            XCTAssertNil(store.displayConfiguration(accountID: 333, peerID: 222))
+            XCTAssertNil(store.displayConfiguration(accountID: 111, peerID: 444))
+            let reopened = SnowHatStore(defaults: defaults)
+            XCTAssertEqual(reopened.displayConfiguration(accountID: 111, peerID: 222), draft)
+            // Storage identity includes no photo URL or image representation.
+            draft.enabled = false
+            XCTAssertTrue(reopened.saveOverride(draft, accountID: 111, peerID: 222))
+            XCTAssertEqual(SnowHatStore(defaults: defaults).displayConfiguration(accountID: 111, peerID: 222)?.enabled, false)
+            let newer = self.configuration(hatID: 5, revision: 1)
+            XCTAssertTrue(reopened.accept(messageText: try XCTUnwrap(newer.messageText()), authorID: 222, accountID: 111, messageTimestamp: self.messageTimestamp))
+            XCTAssertEqual(reopened.configuration(accountID: 111, peerID: 222), newer)
+            XCTAssertEqual(reopened.displayConfiguration(accountID: 111, peerID: 222)?.enabled, false)
+            XCTAssertFalse(store.saveOverride(draft, accountID: 111, peerID: 444))
+            XCTAssertFalse(store.saveOverride(draft, accountID: 0, peerID: 222))
+            XCTAssertFalse(store.saveLocal(draft, accountID: 111))
+        }
+    }
+
     func testAllTenHatsRoundTripNormalizedGeometry() throws {
         for hat in 1 ... 10 {
             var configuration = self.configuration(hatID: hat)

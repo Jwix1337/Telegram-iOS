@@ -7,6 +7,9 @@ public final class SnowHatEditorViewController: UIViewController, UIGestureRecog
 
     private let accountID: Int64
     private let onPublish: (SnowHatConfiguration) -> Void
+    private var localPeerID: Int64?
+    private var avatarPreviewView: UIView?
+    public var avatarPreviewLayout: ((CGSize) -> Void)?
     private var draft: SnowHatConfiguration
     private let russian = Locale.preferredLanguages.first?.lowercased().hasPrefix("ru") == true
     private let scrollView = UIScrollView()
@@ -24,6 +27,15 @@ public final class SnowHatEditorViewController: UIViewController, UIGestureRecog
         super.init(nibName: nil, bundle: nil)
         self.avatar.image = avatarImage
         self.modalPresentationStyle = .formSheet
+    }
+
+    /// Transactional profile editor: only Apply writes; dismissal discards the draft.
+    public convenience init(accountID: Int64, peerID: Int64, avatarPreviewView: UIView) {
+        self.init(accountID: accountID, avatarImage: nil, onPublish: { _ in })
+        self.localPeerID = peerID
+        self.draft = SnowHatStore.shared.displayConfiguration(accountID: accountID, peerID: peerID)
+            ?? SnowHatConfiguration(ownerID: peerID, enabled: false)
+        self.avatarPreviewView = avatarPreviewView
     }
 
     required init?(coder: NSCoder) {
@@ -81,6 +93,10 @@ public final class SnowHatEditorViewController: UIViewController, UIGestureRecog
         self.avatar.tintColor = .secondaryLabel
         self.avatar.clipsToBounds = true
         self.previewContainer.addSubview(self.avatar)
+        if let preview = self.avatarPreviewView {
+            preview.isUserInteractionEnabled = false
+            self.avatar.addSubview(preview)
+        }
         self.previewContainer.addSubview(self.overlay)
         self.content.addArrangedSubview(self.previewContainer)
         self.content.addArrangedSubview(self.label(self.text("Двигайте шапку, изменяйте размер двумя пальцами и поворачивайте.", "Drag the hat, pinch to resize, and rotate with two fingers."), style: .footnote))
@@ -120,11 +136,18 @@ public final class SnowHatEditorViewController: UIViewController, UIGestureRecog
         self.status.textColor = .secondaryLabel
         self.status.numberOfLines = 0
         self.content.addArrangedSubview(self.status)
-        self.content.addArrangedSubview(self.action(self.text("Сохранить на устройстве", "Save on This Device"), selector: #selector(self.saveLocal), prominent: false))
-        self.content.addArrangedSubview(self.action(self.text("Сохранить и опубликовать", "Save and Publish"), selector: #selector(self.publish), prominent: true))
-        self.content.addArrangedSubview(self.action(self.text("Сбросить положение", "Reset Position"), selector: #selector(self.resetPosition), prominent: false))
-        self.content.addArrangedSubview(self.action(self.text("Отключить и опубликовать", "Disable and Publish"), selector: #selector(self.disableAndPublish), prominent: false))
-        self.content.addArrangedSubview(self.label(self.text("Другие пользователи Telegram Snow увидят шапку после получения обычного видимого сообщения. При публикации вы выберете получателя и подтвердите отправку. Фото профиля не изменяется.", "Other Telegram Snow users see your hat after receiving a normal visible message. Publishing lets you choose a recipient and confirm sending. Your profile photo stays unchanged."), style: .footnote))
+        if self.localPeerID != nil {
+            self.content.addArrangedSubview(self.action(self.text("Без шапки", "No Hat"), selector: #selector(self.removeHat), prominent: false))
+            self.content.addArrangedSubview(self.action(self.text("Применить", "Apply"), selector: #selector(self.applyOverride), prominent: true))
+            self.content.addArrangedSubview(self.action(self.text("Отмена", "Cancel"), selector: #selector(self.close), prominent: false))
+            self.content.addArrangedSubview(self.label(self.text("Украшение видно только в текущем аккаунте на этом устройстве. Фото Telegram не изменяется.", "Visible only in this account on this device. The Telegram photo is unchanged."), style: .footnote))
+        } else {
+            self.content.addArrangedSubview(self.action(self.text("Сохранить на устройстве", "Save on This Device"), selector: #selector(self.saveLocal), prominent: false))
+            self.content.addArrangedSubview(self.action(self.text("Сохранить и опубликовать", "Save and Publish"), selector: #selector(self.publish), prominent: true))
+            self.content.addArrangedSubview(self.action(self.text("Сбросить положение", "Reset Position"), selector: #selector(self.resetPosition), prominent: false))
+            self.content.addArrangedSubview(self.action(self.text("Отключить и опубликовать", "Disable and Publish"), selector: #selector(self.disableAndPublish), prominent: false))
+            self.content.addArrangedSubview(self.label(self.text("Другие пользователи Telegram Snow увидят шапку после получения обычного видимого сообщения. При публикации вы выберете получателя и подтвердите отправку. Фото профиля не изменяется.", "Other Telegram Snow users see your hat after receiving a normal visible message. Publishing lets you choose a recipient and confirm sending. Your profile photo stays unchanged."), style: .footnote))
+        }
         self.updatePreview()
     }
 
@@ -133,6 +156,8 @@ public final class SnowHatEditorViewController: UIViewController, UIGestureRecog
         let diameter = min(166.0, max(80.0, self.previewContainer.bounds.width - 100.0))
         self.avatar.frame = CGRect(x: (self.previewContainer.bounds.width - diameter) * 0.5, y: 102.0, width: diameter, height: diameter)
         self.avatar.layer.cornerRadius = diameter * 0.5
+        self.avatarPreviewView?.frame = self.avatar.bounds
+        self.avatarPreviewLayout?(self.avatar.bounds.size)
         self.overlay.frame = self.avatar.frame
         self.overlay.layoutIfNeeded()
     }
@@ -202,10 +227,14 @@ public final class SnowHatEditorViewController: UIViewController, UIGestureRecog
         if self.avatar.image == nil { self.avatar.image = UIImage(systemName: "person.fill") }
         self.overlay.preview(self.draft)
         for button in self.choices {
-            let selected = button.tag == self.draft.hatID
+            let selected = self.draft.enabled && button.tag == self.draft.hatID
             button.layer.borderColor = (selected ? UIColor.systemBlue : UIColor.clear).cgColor
             button.backgroundColor = selected ? UIColor.systemBlue.withAlphaComponent(0.08) : .clear
             button.accessibilityTraits = selected ? [.button, .selected] : .button
+        }
+        if self.localPeerID != nil {
+            self.status.text = self.text("Предпросмотр. Изменения сохраняются только по кнопке «Применить».", "Preview. Changes are saved only when you tap Apply.")
+            return
         }
         self.status.text = self.draft.enabled ? self.text("Предпросмотр. Публикация передаёт настройки выбранному пользователю видимым сообщением.", "Preview. Publishing shares these settings with the selected user in a visible message.") : self.text("Шапка отключена. Выберите шапку, чтобы включить её.", "Hat is disabled. Choose a hat to enable it.")
     }
@@ -253,6 +282,18 @@ public final class SnowHatEditorViewController: UIViewController, UIGestureRecog
         self.draft.offsetY = -0.4
         self.draft.rotation = 0.0
         self.updatePreview()
+    }
+
+    @objc private func removeHat() {
+        self.draft.enabled = false
+        self.updatePreview()
+    }
+
+    @objc private func applyOverride() {
+        guard let peerID = self.localPeerID else { return }
+        if SnowHatStore.shared.saveOverride(self.draft, accountID: self.accountID, peerID: peerID) {
+            self.close()
+        }
     }
 
     @objc private func saveLocal() {

@@ -97,6 +97,18 @@ func infoItems(
         interaction.openBirthdayContextMenu(node, gesture)
     }
     
+    if let peer = data.peer, case let .user(user) = peer, user.botInfo == nil,
+       peer.id.namespace == Namespaces.Peer.CloudUser {
+        items[.peerSettings]!.append(PeerInfoScreenDisclosureItem(
+            id: "winterAvatarHat", label: .none,
+            text: presentationData.strings.baseLanguageCode.lowercased().hasPrefix("ru") ? "Зимняя шапка" : "Winter Hat",
+            icon: PresentationResourcesSettings.settings,
+            action: {
+                interaction.getController()?.push(WinterProfileHatController(context: context, peer: peer))
+            }
+        ))
+    }
+
     if case let .user(user) = data.peer {
         let ItemCallList = 1000
         let ItemPersonalChannelHeader = 2000
