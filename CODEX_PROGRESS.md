@@ -1,10 +1,26 @@
+# IPA успешно собран — 2026-11-16, run43943288701
+
+SUCCESS: https://github.com/Jwix1337/Telegram-iOS/actions/runs/43943288701 . Реальная macOS/Xcode27.1/Bazel9.2 iPhoneOS arm64 сборка из codex/winter-validation, source7eecba51e4dc871f04285db69b95f37ddc9a8dbf. Device job19:49:41–22:06:52UTC (~2ч17мин). Платный xlarge не выбирался; сервер/VPS/master не менялись. После этой сборки изменяется только прогресс, код артефакта остаётся7eecba5.
+
+Артефакт: TelegramSnow-iPhone-SideStore-own-api-10, id14277781375, size83403076байт, expired=false. Ссылка: https://github.com/Jwix1337/Telegram-iOS/actions/runs/43943288701/artifacts/14277781375 . ZIP содержит выходной TelegramSnow.ipa по успешному upload build/artifacts/*.ipa. SHA256 артефакта ZIP из GitHub API: 77545dcbf03d04569a12858bad83f906cf7ececc0e6588aa9d4fcb6b06ac01d5 (это НЕ отдельно измеренный hash IPA). Retention7дней по workflow.
+
+Реально проверено в этом CI:14Python тестов правил упаковки PASS; swiftc typecheck всего SnowEffect с iOS SDK PASS; полная нативная компиляция Telegram/Telegram PASS; Validate and package for SideStore PASS; upload artifact PASS. Лог: Device IPA prepared: build/artifacts/TelegramSnow.ipa; extensions0/6; re-sign with SideStore before installation. Bundle target org.snoweffect.TelegramSnow, --define=buildNumber=100010, own API mode, iOS arm64 min15. Ранее38Foundation XCTest прошли в run43896432500; в этом IPA run models_only job корректно SKIPPED, повторные38тестов не выдавать за новый запуск.
+
+Закрыты подтверждённые compiler errors: UIView gestureRecognizerShouldBegin override; WinterSnowmanCanvas(frame:.zero); PresentationDataUtils import для textAlertController(context:) в SettingsUI и WinterChatInteractions; Foundation.Timer qualification в bridge. Дополнительно сохранён быстрый iOS SDK typecheck preflight в workflow. Реальные предыдущие failure runs43887924548/43896990604/43920418338 сохранены как история, не как готовые IPA.
+
+Ограничения проверки: прямое скачивание ZIP в облачную среду вернуло Forbidden на временном хранилище; повторно обходить ограничение не пытались. Наличие/размер/целостный digest/неистёкший статус проверены API, полный CI log и этап упаковки доступны. Содержимое IPA вручную в Linux не распаковано, внутренний Info.plist/число frameworks независимо не проверены. Нового тестирования на iPhone/двух клиентах/симуляторе, визуальной оценки и Instruments не было. Успех компиляции не означает доказанную синхронизацию и UI/энергопотребление.
+
+Следующий конкретный шаг для пользователя: войти в GitHub, скачать артефакт ZIP по ссылке, извлечь TelegramSnow.ipa и установить/переподписать через существующий SideStore. Затем проверить запуск/авторизацию,3места шапок/смену/снятие, снег/клавиатуру/жесты, добровольную привязку Winter Sync и два iPhone. Новую IPA сборку сейчас НЕ запускать: готовый артефакт уже опубликован. Команды продолжения: git status --short; gh run view 43943288701; gh api repos/Jwix1337/Telegram-iOS/actions/runs/43943288701/artifacts.
+
+---
+
 # Исправление Timer в TelegramUI, 2026-11-16
 
 Run43920418338 (99320ce) FAILURE: компиляция дошла до TelegramUI (9873/9962 Bazel actions), компилятор сообщил неоднозначный Timer в WinterChatInteractions.swift:20. Нативный лог показал Foundation.Timer и SwiftSignalKit.Timer как кандидаты. Retry использует Foundation timeInterval/repeats и RunLoop.main; явно квалифицированы тип свойства retry и создание Foundation.Timer. Интервал15секунд/порядок invalidation/транспорт не изменены.
 
 Проверено локально: оба Timer в этом зимнем файле квалифицированы, Swift grammar и diff whitespace PASS. Соседние ChatController timers уже SwiftSignalKit-qualified; их код не менялся. Полная TelegramUI компиляция после этого патча ещё не подтверждена. SnowEffect iOS SDK typecheck и38Foundation tests из предыдущего успешного preflight актуальны; отдельно не повторялись. Старый IPA не выдавать за новую сборку, нового IPA пока нет.
 
-Следующий шаг: коммит/обычный push патча, одна новая IPA сборка xcode-27/own/no-extensions, наблюдать результат и проверять только реальные новые diagnostics. Master/сервер/VPS/ресурсы не менять, xlarge не использовать.
+Опубликован commit7eecba51e4dc871f04285db69b95f37ddc9a8dbf. IPA сборка run43943288701 (xcode-27/own/no-extensions) завершилась SUCCESS22:06:52UTC; артефакт TelegramSnow-iPhone-SideStore-own-api-10 опубликован. Продолжение: gh run view 43943288701 --json status,conclusion,jobs; при failure читать --log-failed, при success проверить artifacts. Монитор: /tmp/telegram-snow-watch43943288701.log. Не запускать дублирующую сборку. Master/сервер/VPS/ресурсы не менять, xlarge не использовать.
 
 ---
 
