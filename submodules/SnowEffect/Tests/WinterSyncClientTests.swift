@@ -56,6 +56,15 @@ final class WinterSyncClientTests: XCTestCase {
         XCTAssertNil((object["mutation"] as? [String: Any])?["clock"])
         XCTAssertEqual(object["event_id"] as? String, event.eventID.lowercased())
     }
+    func testServerUnavailableDoesNotReportSuccessfulDelivery() async throws {
+        let client = try client(); defer { client.stop() }
+        WinterSyncURLProtocol.handle = { _ in throw URLError(.notConnectedToInternet) }
+        do {
+            _ = try await client.publish(WinterSyncRequest(WinterEvent(type: .snowball, senderID: 1, recipientID: 2), pair: pair, expected: nil))
+            XCTFail("An unavailable service must not acknowledge delivery")
+        } catch let error as URLError { XCTAssertEqual(error.code, .notConnectedToInternet) }
+    }
+
     func testVersionConflictRemainsAnErrorForExplicitRetry() async throws {
         let client = try client(); defer { client.stop() }
         WinterSyncURLProtocol.handle = { _ in (409, Data("{\"detail\":\"version conflict\"}".utf8)) }

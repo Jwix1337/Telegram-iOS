@@ -1,3 +1,30 @@
+# Стабилизация Winter Sync — 2026-11-16
+
+Ветка codex/winter-validation, один агент. Новые функции не добавлялись, рабочие компоненты не переписывались. Новых подтверждённых дефектов production-кода в доступных проверках не обнаружено.
+
+Проверено 13 уникальных серверных тестов: 10 существующих + 3 интеграционных. Два независимых ASGI HTTP-клиента проходят pairing/взаимное подтверждение, шапки и отключение, снежки/idempotency, общий снеговик, stale-version409 и явный новый запрос, равенство снимков, рестарт SQLite/cursor replay. Дополнительно проверены существующий authenticated WS после отзыва ключа и имитированный отказ SQLite:500 не подтверждает доставку, повтор после восстановления создаёт ровно одно событие. Посторонние/подмена, schema/лимиты/миграция API покрыты существующими тестами. ASGI-клиенты — не Swift и не два iPhone.
+
+Swift: добавлен URLProtocol XCTest ошибки notConnectedToInternet. Он НЕ запускался (нет swiftc/Apple SDK). Изменённый Swift-тест прошёл только grammar parse, git diff --check чистый. Cursor/UI/Keychain/HTTPS/WSS поведения настоящего URLSession пока не подтверждены компиляцией или исполнением. Предыдущая проверка соответствия wire-моделей фактическим API/schema остаётся актуальной; сервер в этой сессии не менялся.
+
+Секреты: 50 доступных tracked текстовых файлов выборочного checkout проверены на private keys, GitHub/AWS credential patterns — совпадений нет, значения не выводились. Дополнительно просмотрены хранение ключей и тестовые credential fixtures. Это ограниченная проверка, НЕ полное сканирование отсутствующих upstream blobs или всей истории Git. Production keys в репозиторий не добавлялись.
+
+Изменены: winter-sync/test_integration.py (3 теста), winter-sync/DEPLOYMENT.md (безопасный staging/rollback/NO-GO при занятом443), submodules/SnowEffect/Tests/WinterSyncClientTests.swift, CODEX_PROGRESS.md. Production код не изменён. VPS, VPN, службы, порты, сертификаты и firewall не трогались; IPA не собиралась.
+
+Готовность: серверная основа готова к отдельной согласованной staging-проверке. Production-развёртывание и заявление о готовности iOS — преждевременны. Перед тестом двух устройств обязательны Apple SDK typecheck/XCTest и безопасный действительный HTTPS/WSS endpoint. Если ingress443 занят VPN и нет отдельно разрешённого варианта, STOP без изменений VPN. GitHub Actions ранее отключены.
+
+Следующий этап только по отдельному разрешению: следовать winter-sync/DEPLOYMENT.md, подготовить staging, выполнить macOS модельные тесты и iOS XCTest/Keychain, затем реальную проверку двух устройств. В текущей сессии остановиться.
+
+Команды из /workspace/TelegramSnow:
+```
+python3 -m unittest discover -s winter-sync -q
+# только новые сценарии:
+python3 -m unittest discover -s winter-sync -p test_integration.py -q
+# только с native Swift на macOS:
+python3 build-system/SnowEffect/test_winter_models.py
+```
+
+---
+
 # Winter Sync — iOS-интеграция, 2026-11-16
 
 Ветка codex/winter-validation, один агент. Master, VPS/VPN, сертификаты и порты не изменялись; IPA не собиралась. Этап реализации интеграции завершён, переход к развёртыванию не выполнять.
