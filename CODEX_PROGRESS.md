@@ -1,3 +1,13 @@
+# Исправление SettingsUI после наблюдения за IPA, 2026-11-16
+
+Run43896990604 (ca6b303) FAILURE: SettingsUI/SnowHatPublishing.swift:33 — extra context/missing alertContext. Первопричина: файл импортировал только AlertUI, а требуемый адаптер textAlertController(context:AccountContext,...) экспортируется PresentationDataUtils. Добавлен отсутствующий import в этот файл и аналогичный WinterChatInteractions.swift (его вызовы имеют ту же сигнатуру). Зависимость уже есть в обоих BUILD, новые зависимости/серверные изменения не добавлены.
+
+Проверено: сигнатура фактического адаптера и существующие SettingsUI call-sites/импорты; Swift grammar2файлов и git diff --check PASS. SettingsUI/TelegramUI typecheck целиком локально недоступен без Apple SDK и собранного графа зависимостей; полноценную компиляцию подтвердит только новый CI. 38успешных Foundation tests и успешный iOS SDK typecheck SnowEffect из run43896432500 остаются актуальны (их исходники не менялись); отдельный повтор этих тестов не запускался.
+
+Следующее действие: коммит/обычный push в codex/winter-validation, одна новая IPA сборка xcode-27/own/no-extensions и наблюдение до результата. Не выбирать xlarge, не менять master/VPS, не запускать параллельные IPA сборки. GitHub API может временно отвечать503; это не ошибка самой сборки. Live job-log download вернул Forbidden, completed --log-failed доступен; секретные redirect URLs в прогресс не копировать.
+
+---
+
 # Исправление первой сборки новой ветки, 2026-11-16
 
 GitHub Actions run43887924548 (b5c4f57) реально дошёл до SwiftCompile и завершился failure. Два подтверждённых compiler errors в SnowEffect: SnowAccumulationView.gestureRecognizerShouldBegin требует override (метод UIView); WinterSnowmanCanvas(frame:transparent:) вызван без frame. Исправлены минимально: public override func и frame:.zero.
@@ -6,7 +16,7 @@ GitHub Actions run43887924548 (b5c4f57) реально дошёл до SwiftComp
 
 Preflight run43895846938 остался в очереди macos-15 и отменён до исполнения. models_only теперь использует тот же выбранный runner и закреплённый DEVELOPER_DIR/Xcode27.1, что IPA; это исключает расхождение SDK между проверкой и production build. xlarge не выбран.
 
-Локально прошли Python syntax, YAML/preflight wiring, grammar parse2изменённых Swift и diff whitespace. macOS/Xcode27.1 CI run43896432500 (23ffd29) SUCCESS: настоящий swiftc -typecheck всего SnowEffect с iPhoneOS SDK прошёл; все38Foundation XCTest прошли без failures; дополнительный swift frontend parse прошёл. UI XCTest/запуск iPhone не выполнялись. Следующее действие: повторить IPA workflow из этой ветки на xcode-27 (не xlarge), получить реальный результат всей сборки. Это подтверждает SnowEffect и модели, но не компиляцию остальных модулей Telegram и не готовый IPA. Сервер/master/VPS/ресурсы и функциональная механика не менялись.
+Локально прошли Python syntax, YAML/preflight wiring, grammar parse2изменённых Swift и diff whitespace. macOS/Xcode27.1 CI run43896432500 (23ffd29) SUCCESS: настоящий swiftc -typecheck всего SnowEffect с iPhoneOS SDK прошёл; все38Foundation XCTest прошли без failures; дополнительный swift frontend parse прошёл. UI XCTest/запуск iPhone не выполнялись. Повторная IPA сборка run43896990604 запущена из ca6b3031f96e791ad45696f5a782582bf4fa8f56 на xcode-27 (не xlarge). Завершилась failure17:35UTC (примерно2ч05мин), IPA не создан. Компилятор SettingsUI нашёл недоступный overload textAlertController(context:) в SnowHatPublishing.swift:33. Функция определена в PresentationDataUtils/Sources/AlertTheme.swift; отсутствовал import PresentationDataUtils. Добавлен этот import в SnowHatPublishing.swift и второй зимний call-site WinterChatInteractions.swift; оба BUILD уже содержат зависимость, изменений API/поведения нет. Активный gh run watch пишет /tmp/telegram-snow-watch43896990604.log. Продолжение: gh run view 43896990604 --json status,conclusion,jobs; при failure gh run view 43896990604 --log-failed, при success проверить artifacts API. Не запускать дублирующую сборку. Это подтверждает SnowEffect и модели, но не компиляцию остальных модулей Telegram и не готовый IPA. Сервер/master/VPS/ресурсы и функциональная механика не менялись.
 
 ---
 

@@ -7,6 +7,7 @@ import TelegramCore
 import TelegramPresentationData
 import AccountContext
 import AlertUI
+import PresentationDataUtils
 import SnowEffect
 
 /// The only network bridge for explicitly confirmed winter events, including hats.
