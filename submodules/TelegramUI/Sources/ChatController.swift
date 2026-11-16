@@ -8059,6 +8059,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         self.chatDisplayNode.setSnowMoldHandler { [weak self] ticket in
             self?.winterInteractions?.useMoldedBall(ticket)
         }
+        self.winterInteractions?.onMiniSession = { [weak self] session in
+            self?.chatDisplayNode.setMiniSnowman(session) { [weak self] in self?.winterInteractions?.openCurrentSnowman() }
+        }
         self.winterInteractions?.setVisible(true)
     }
 

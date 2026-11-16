@@ -40,6 +40,14 @@ final class WinterEventAccountBridge {
             guard (notification.userInfo?["accountID"] as? Int64) == accountID else { return }
             self?.pump()
         })
+        self.observers.append(center.addObserver(forName: SnowEffectPreferences.didChange, object: SnowEffectPreferences.shared, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            WinterSyncHub.shared.start(accountID: accountID)
+            if !WinterSyncHub.needsConnection(accountID: accountID) {
+                self.retry?.invalidate(); self.retry = nil
+                self.outgoing.set(nil); self.sending = false
+            } else { self.pump() }
+        })
         self.observers.append(center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
             WinterSyncHub.shared.start(accountID: accountID); self?.pump()
         })
@@ -68,7 +76,8 @@ final class WinterEventAccountBridge {
               let context = self.context else { return }
         let accountID = context.account.peerId.toInt64()
         guard let event = WinterEventTransport.shared.pendingOutgoing(accountID: accountID).first(where: { !WinterSyncHub.shared.owns(accountID: accountID, peerID: $0.recipientID) }),
-              let text = WinterEventTransport.shared.messageText(event) else { return }
+              let text = WinterEventTransport.shared.messageText(event),
+              event.type == .hat || WinterSyncHub.needsConnection(accountID: accountID) else { return }
         self.sending = true
         self.retry?.invalidate()
         self.retry = nil
@@ -96,6 +105,7 @@ final class WinterChatInteractions: NSObject {
     private weak var host: ViewController?
     private let sendImage: (UIImage) -> Void
     private let snowball = WinterSnowballView(frame: .zero)
+    var onMiniSession: ((WinterSnowmanSession?) -> Void)?
     private var visible = false
     private weak var snowmanHost: WinterSnowmanHostController?
     private var pendingServerOpen: String?
@@ -114,6 +124,8 @@ final class WinterChatInteractions: NSObject {
         let center = NotificationCenter.default
         center.addObserver(self, selector: #selector(self.changed), name: WinterEventTransport.didChange, object: WinterEventTransport.shared)
         center.addObserver(self, selector: #selector(self.changed), name: SnowEffectPreferences.didChange, object: SnowEffectPreferences.shared)
+        center.addObserver(self, selector: #selector(self.changed), name: ProcessInfo.thermalStateDidChangeNotification, object: nil)
+        center.addObserver(self, selector: #selector(self.changed), name: .NSProcessInfoPowerStateDidChange, object: nil)
         center.addObserver(self, selector: #selector(self.changed), name: UIApplication.didBecomeActiveNotification, object: nil)
         center.addObserver(self, selector: #selector(self.resignActive), name: UIApplication.willResignActiveNotification, object: nil)
     }
@@ -142,7 +154,10 @@ final class WinterChatInteractions: NSObject {
 
     private func text(_ ru: String, _ en: String) -> String { self.russian ? ru : en }
 
-    @objc private func changed() { self.refresh() }
+    @objc private func changed() {
+        guard Thread.isMainThread else { DispatchQueue.main.async { [weak self] in self?.changed() }; return }
+        self.refresh()
+    }
     @objc private func resignActive() {
         self.snowball.stop()
         self.removeButton()
@@ -167,7 +182,11 @@ final class WinterChatInteractions: NSObject {
         host.navigationItem.rightBarButtonItems = items.filter { $0 !== self.button }
     }
 
+    func openCurrentSnowman() {
+        if let session = WinterEventTransport.shared.session(accountID: accountID, peerID: peerID.toInt64()), session.completed { openSnowman(session) }
+    }
     private func refresh() {
+        onMiniSession?(WinterEventTransport.shared.session(accountID: accountID, peerID: peerID.toInt64()))
         if let session = WinterEventTransport.shared.session(accountID: self.accountID, peerID: self.peerID.toInt64()) {
             self.snowmanSessionID = session.sessionID
             self.snowmanHost?.update(session: session)

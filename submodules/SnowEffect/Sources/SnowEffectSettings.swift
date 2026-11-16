@@ -53,6 +53,7 @@ public struct SnowEffectSettings: Codable, Equatable {
     public var winterReceiveSnowballs: Bool = true
     public var winterSnowmanEnabled: Bool = true
     public var winterAnimationsEnabled: Bool = true
+    public var showMiniSnowman: Bool = true
 
     public init() {
     }
@@ -60,7 +61,7 @@ public struct SnowEffectSettings: Codable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case enabled, seasonal, intensity, speed, size
         case accumulationEnabled, accumulationSpeed, maximumSnowHeight, shakeToClear, swipeToClear
-        case winterSnowballsEnabled, winterReceiveSnowballs, winterSnowmanEnabled, winterAnimationsEnabled
+        case winterSnowballsEnabled, winterReceiveSnowballs, winterSnowmanEnabled, winterAnimationsEnabled, showMiniSnowman
     }
 
     public init(from decoder: Decoder) throws {
@@ -79,6 +80,7 @@ public struct SnowEffectSettings: Codable, Equatable {
         self.winterReceiveSnowballs = try container.decodeIfPresent(Bool.self, forKey: .winterReceiveSnowballs) ?? true
         self.winterSnowmanEnabled = try container.decodeIfPresent(Bool.self, forKey: .winterSnowmanEnabled) ?? true
         self.winterAnimationsEnabled = try container.decodeIfPresent(Bool.self, forKey: .winterAnimationsEnabled) ?? true
+        self.showMiniSnowman = try container.decodeIfPresent(Bool.self, forKey: .showMiniSnowman) ?? true
     }
 
     /// Gregorian months, in the user's time zone, regardless of their preferred calendar.

@@ -257,6 +257,10 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     private var navigationModalFrame: NavigationModalFrame?
     
     let inputPanelContainerNode: ChatInputPanelContainer
+    private let miniSnowman = WinterMiniSnowmanView(frame: .zero)
+    private var miniSession: WinterSnowmanSession?
+    private var miniReserveHeight: CGFloat = 0
+    private var miniSetting = true
     private let snowAccumulationView = SnowAccumulationView(frame: .zero)
     private var snowEffectIsVisible = false
     private let inputPanelOverlayNode: SparseNode
@@ -1103,8 +1107,18 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         self.loadMoreSearchResultsDisposable?.dispose()
     }
     
+    func setMiniSnowman(_ session: WinterSnowmanSession?, onOpen: @escaping () -> Void) {
+        let enabled = SnowEffectPreferences.shared.settings.showMiniSnowman && SnowEffectPreferences.shared.settings.winterSnowmanEnabled && ProcessInfo.processInfo.thermalState != .critical
+        miniSnowman.onOpen = onOpen
+        guard miniSession != session || miniSetting != enabled else { return }
+        miniSession = session; miniSetting = enabled
+        requestLayout(.immediate)
+    }
+
     func setSnowEffectVisible(_ visible: Bool) {
+        let changed = self.snowEffectIsVisible != visible
         self.snowEffectIsVisible = visible
+        if changed { requestLayout(.immediate) }
         self.updateSnowAccumulationAnchor()
     }
 
@@ -1118,11 +1132,20 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
 
     private func updateSnowAccumulationAnchor() {
         guard let panel = self.inputPanelNode as? ChatTextInputPanelNode else {
+            self.miniSnowman.isHidden = true
             self.snowAccumulationView.isEffectVisible = false
             self.snowAccumulationView.isHidden = true
             return
         }
         let anchor = panel.snowAccumulationAnchorView
+        if miniSnowman.superview !== anchor { anchor.addSubview(miniSnowman) }
+        miniSnowman.update(miniReserveHeight > 0 && snowEffectIsVisible ? miniSession : nil, dark: self.chatPresentationInterfaceState.theme.overallDarkAppearance)
+        let height = max(0, miniReserveHeight - 8)
+        if let image = miniSnowman.image(for: .normal), image.size.height > 0 {
+            let width = height * image.size.width / image.size.height
+            miniSnowman.frame = CGRect(x: (anchor.bounds.width - width) * 0.5, y: -height - 2, width: width, height: height)
+        }
+        miniSnowman.isHidden = miniReserveHeight == 0 || !snowEffectIsVisible || miniSnowman.image(for: .normal) == nil
         if self.snowAccumulationView.superview !== anchor {
             anchor.addSubview(self.snowAccumulationView)
             self.snowAccumulationView.autoresizingMask = [.flexibleWidth]
@@ -2053,6 +2076,22 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             self.inputPanelNode = nil
         }
         
+        miniReserveHeight = 0
+        let miniPrefs = SnowEffectPreferences.shared.settings
+        let miniHasMediaInput: Bool
+        if case .media = self.chatPresentationInterfaceState.inputMode { miniHasMediaInput = true } else { miniHasMediaInput = false }
+        if let size = inputPanelSize, self.inputPanelNode is ChatTextInputPanelNode,
+           miniSession?.completed == true, miniSession?.isBuilt == true,
+           miniPrefs.showMiniSnowman, miniPrefs.winterSnowmanEnabled, snowEffectIsVisible, !miniHasMediaInput, ProcessInfo.processInfo.thermalState != .critical,
+           self.chatPresentationInterfaceState.inputTextPanelState.mediaRecordingState == nil,
+           self.inputNode?.hideInput != true, self.inputPanelContainerNode.expansionFraction == 0 {
+            let available = layout.size.height - insets.top - insets.bottom - size.height
+            miniReserveHeight = WinterMiniSnowmanLayout.reservedHeight(available: available, width: layout.size.width)
+            if miniReserveHeight > 0 {
+                inputPanelSize = CGSize(width: size.width, height: size.height + miniReserveHeight)
+            }
+        }
+
         if let secondaryInputPanelNode = inputPanelNodes.secondary, !previewing {
             if secondaryInputPanelNode !== self.secondaryInputPanelNode {
                 dismissedSecondaryInputPanelNode = self.secondaryInputPanelNode
@@ -2863,7 +2902,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
         
         
-        var apparentInputPanelFrame = inputPanelFrame
+        var apparentInputPanelFrame = inputPanelFrame.map { frame in
+            CGRect(x: frame.minX, y: frame.minY + miniReserveHeight, width: frame.width, height: frame.height - miniReserveHeight)
+        }
         let apparentSecondaryInputPanelFrame = secondaryInputPanelFrame
         var apparentInputBackgroundFrame = inputBackgroundFrame
         var apparentNavigateButtonsFrame = navigateButtonsFrame
@@ -4664,6 +4705,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         
         // The bank extends above the field, outside its parent's bounds. Forward only
         // hits on the snow shape after Telegram's input and context overlays had priority.
+        if let result = self.miniSnowman.hitTest(self.view.convert(point, to: self.miniSnowman), with: event) { return result }
         if let result = self.snowAccumulationView.hitTest(self.view.convert(point, to: self.snowAccumulationView), with: event) {
             return result
         }

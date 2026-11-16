@@ -283,7 +283,7 @@ public final class WinterSnowmanViewController: UIViewController {
 }
 
 /// A fixed small set of shape layers, shared by the on-screen preview and exported artwork.
-private final class WinterSnowmanCanvas: UIView {
+final class WinterSnowmanCanvas: UIView {
     static let scarfColors: [UIColor] = [.systemRed, .systemBlue, .systemGreen, .systemPurple, .systemOrange, .systemPink]
     private let artwork = CALayer()
     private let ground = CAShapeLayer()
@@ -294,12 +294,13 @@ private final class WinterSnowmanCanvas: UIView {
     private var parts: [SnowmanPart: CALayer] = [:]
     private var visibleParts = Set<SnowmanPart>()
 
-    override init(frame: CGRect) {
+    init(frame: CGRect, transparent: Bool = false) {
         super.init(frame: frame)
-        self.isOpaque = true
-        self.backgroundColor = UIColor(red: 0.78, green: 0.89, blue: 0.96, alpha: 1.0)
+        self.isOpaque = !transparent
+        self.backgroundColor = transparent ? .clear : UIColor(red: 0.78, green: 0.89, blue: 0.96, alpha: 1.0)
         self.isUserInteractionEnabled = false
         self.layer.addSublayer(self.artwork)
+        self.ground.isHidden = transparent
         self.ground.fillColor = UIColor(red: 0.92, green: 0.97, blue: 1.0, alpha: 1.0).cgColor
         self.ground.path = UIBezierPath(ovalIn: CGRect(x: 70.0, y: 870.0, width: 884.0, height: 190.0)).cgPath
         self.artwork.addSublayer(self.ground)

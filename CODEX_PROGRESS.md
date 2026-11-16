@@ -1,3 +1,31 @@
+# Этап3 — мини-снеговик и idle-потребление, 2026-11-16
+
+Ветка codex/winter-validation, один агент, исходное дерево чистое. Сервер/VPS/сеть/master не менялись; IPA/тяжёлая сборка не запускались.
+
+Реализовано: миниатюра только completed && isBuilt, на реальном snowAccumulationAnchorView строки ввода. В расчёт inputPanelSize добавляется выделенный ряд56–80pt, история учитывает этот inset; фактическая рамка inputPanelNode сохраняет свою измеренную высоту и сдвигается внутри зарезервированной области. Высота видимой фигуры ориентировочно48–72pt (обычно~60), пропорции сохранены. При недостатке свободной высоты(<220pt), media input/записи/скрытой панели/critical thermal миниатюра скрывается и ряд не резервируется. Клавиатура/поворот/layout/safe side insets используют существующую родительскую геометрию; поведение ещё требует устройства.
+
+PNG mini60pt не выдаётся за видимую высоту60pt: отдельный прозрачный static render существующего Canvas обрезается по alpha-bounds (128px sample + защитный пиксель). Опора — низ обрезанной фигуры, на2pt выше верхней границы реального поля. Для точных завершённых образов Canvas использует master512, для остальных — прежние10шапок/6цветов/векторные слои. Ground/background исключены из картинки. Кеш12элементов/12MB, ключ art-v2 + все визуальные parts/hatStyle/scarfColor + тема, без лишних session IDs/версий. Перекомпозиция только при изменении картинки; никакого display link/idle-таймера/idle-анимации. Нажатие на собственный alpha-cropped rectangle открывает прежний общий редактор, окружающая пустая область не hit-test цель. Доступность: кнопка с label/hint, без motion-анимаций даже в обычном режиме.
+
+Отдельная Codable-настройка showMiniSnowman по умолчаниюtrue, сохраняется независимо от снегопада и строительства. Переключатель добавлен в Winter Interactions. Settings/thermal/power notifications обновляют layout; background/disappear скрывают видимую работу. WinterSync теперь не стартует при отключённых взаимодействиях и отсутствии активной/подтверждённой pending hat-публикации. Активная шапка — тоже зимняя функция и требует прежней синхронизации; полностью выключенное состояние не удерживает WS/таймер. Legacy retry timer снимается при выключении. Это проверка структуры кода, не замер энергии.
+
+Изменены: WinterMiniSnowmanView.swift (новый), WinterMiniSnowmanTests.swift (новый), WinterSnowmanViewController.swift (параметр transparent/shared Canvas), SnowEffectSettings.swift/Settings UI, WinterSyncService.swift, WinterChatInteractions.swift, ChatController.swift/ChatControllerNode.swift, этот файл.
+
+Проверено доступное: check_snowman_assets.py прошёл (32RGBA/16imagesets/2completedpresets/10hat mappings); синтаксический grammar parse изменённых Swift без ошибок, diff whitespace. Добавлены3 XCTest: диапазоны/резерв места, независимая настройка roundtrip/legacy defaults, асимметричный alpha-bbox/bottom anchor. XCTest/Swift typecheck НЕ запускались: нет nativeSwift/Apple SDK. Серверные тесты не повторялись, сервер не менялся.
+
+Осталось для iPhone/macOS: UIKit/actool/Swift компиляция, асимметричный alpha-coordinate test, размещение с обычной/emoji клавиатурой, multiline/вложениями/reply панелью/поворотом и safearea, hit tests жестов/кнопок/истории, первый показ/выключение и переподключение, Instruments memory/CPU/energy на60/120Hz, LowPower/thermal, запись кадров по AGENTS.md. Плавность, отсутствие перекрытия на всех раскладках и батарея НЕ подтверждены статическими проверками.
+
+Целевые команды:
+```
+python3 build-system/SnowEffect/check_snowman_assets.py
+git diff --check
+# XCTest target на подходящем macOS/iOS SDK:
+# //submodules/SnowEffect:SnowEffectTests
+```
+
+Сохранить отдельным коммитом и обычным push codex/winter-validation. Завершить только этот этап, без VPS или IPA.
+
+---
+
 # Этап 2 — лепка и зимняя коробка, 2026-11-16
 
 Ветка codex/winter-validation, один агент. Исходное дерево чистое. VPS/сервер/протокол v1 не менялись, к endpoint не подключались, IPA не собиралась. Текущий HTTPS endpoint добавлен только как начальное значение setup: https://winter.ogirin-media-assets-pack.space:9443; без device key нет автоматических запросов.

@@ -27,7 +27,7 @@ struct SnowEffectStrings {
             self.sizes = ["Маленькие", "Обычные", "Крупные"]
             self.snowHeights = ["Малая", "Средняя", "Большая"]
             self.winterTitle = "Зимние взаимодействия"
-            self.winterLabels = ["Отправлять снежки", "Принимать снежки", "Совместный снеговик", "Зимние анимации"]
+            self.winterLabels = ["Отправлять снежки", "Принимать снежки", "Совместный снеговик", "Зимние анимации", "Снеговик над строкой ввода"]
             self.info = "Снег отображается только внутри открытых переписок. Сугроб накапливается над полем ввода; смахните его или встряхните iPhone для очистки. Отключите сезонный режим для снега круглый год. При включённом «Уменьшении движения» анимация отключается. Режим энергосбережения снижает интенсивность. Настройки действуют для всех аккаунтов на этом устройстве."
         } else {
             self.title = "Snow Effect"
@@ -37,7 +37,7 @@ struct SnowEffectStrings {
             self.sizes = ["Small", "Normal", "Large"]
             self.snowHeights = ["Small", "Medium", "Large"]
             self.winterTitle = "Winter Interactions"
-            self.winterLabels = ["Enable Snowballs", "Receive Snowballs", "Enable Snowman", "Winter Animations"]
+            self.winterLabels = ["Enable Snowballs", "Receive Snowballs", "Enable Snowman", "Winter Animations", "Show Mini Snowman"]
             self.info = "Snow appears only inside open conversations. Snow accumulates above the message field; swipe it or shake your iPhone to clear it. Turn off seasonal mode for year-round snow. Reduce Motion disables the animation. Low Power Mode reduces intensity. Settings apply to all accounts on this device."
         }
     }
@@ -112,6 +112,7 @@ func snowEffectSettingsController(context: AccountContext) -> ViewController {
             case 13: settings.winterReceiveSnowballs = value
             case 14: settings.winterSnowmanEnabled = value
             case 15: settings.winterAnimationsEnabled = value
+            case 16: settings.showMiniSnowman = value
             default: break
             }
         }
@@ -193,7 +194,7 @@ func snowEffectSettingsController(context: AccountContext) -> ViewController {
         }
         entries.append(SnowEffectSettingsEntry(stableId: 10, theme: presentationData.theme, title: strings.info, value: .info))
         entries.append(SnowEffectSettingsEntry(stableId: 11, theme: presentationData.theme, title: strings.winterTitle, value: .header))
-        let winterValues = [settings.winterSnowballsEnabled, settings.winterReceiveSnowballs, settings.winterSnowmanEnabled, settings.winterAnimationsEnabled]
+        let winterValues = [settings.winterSnowballsEnabled, settings.winterReceiveSnowballs, settings.winterSnowmanEnabled, settings.winterAnimationsEnabled, settings.showMiniSnowman]
         for (index, value) in winterValues.enumerated() {
             entries.append(SnowEffectSettingsEntry(stableId: Int32(index + 12), theme: presentationData.theme, title: strings.winterLabels[index], value: .toggle(value)))
         }

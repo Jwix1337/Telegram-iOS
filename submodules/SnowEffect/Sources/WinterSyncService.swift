@@ -80,7 +80,17 @@ public final class WinterSyncHub: WinterServerTransport {
         services[account] = service
         return service
     }
-    public func start(accountID: Int64) { WinterEventTransport.serverTransport = self; service(accountID).start() }
+    public static func needsConnection(accountID: Int64) -> Bool {
+        let settings = SnowEffectPreferences.shared.settings
+        return settings.winterSnowballsEnabled || settings.winterReceiveSnowballs || settings.winterSnowmanEnabled
+            || SnowHatStore.shared.configuration(accountID: accountID, peerID: accountID)?.enabled == true
+            || cache(accountID).outgoing.contains { $0.body.type == .hat }
+    }
+    public func start(accountID: Int64) {
+        WinterEventTransport.serverTransport = self
+        guard Self.needsConnection(accountID: accountID) else { stop(accountID: accountID); return }
+        service(accountID).start()
+    }
     public func stop(accountID: Int64) { services.removeValue(forKey: accountID)?.stop() }
     public func owns(accountID: Int64, peerID: Int64) -> Bool {
         // Can also be called on Telegram's incoming-message queue.
@@ -188,7 +198,7 @@ private final class WinterSyncService {
     }
     func restart() { stop(); start() }
     func start() {
-        guard task == nil, UIApplication.shared.applicationState == .active,
+        guard task == nil, WinterSyncHub.needsConnection(accountID: account), UIApplication.shared.applicationState == .active,
               let credentials = WinterSyncKeychain.read(account) else { return }
         let client = WinterSyncClient(credentials); self.client = client
         let generation = self.generation
@@ -203,6 +213,7 @@ private final class WinterSyncService {
                     self.socket = socket; self.status = self.cache.outgoing.contains(where: { $0.blocked }) ? "Winter Sync: action conflict, explicit retry required" : "Winter Sync: connected"; delay = 1
                     var refreshAt = Date().timeIntervalSince1970 + 30
                     while !Task.isCancelled {
+                        guard WinterSyncHub.needsConnection(accountID: self.account) else { self.stop(); return }
                         let message = try await socket.receive()
                         guard self.generation == generation else { return }
                         let data: Data
