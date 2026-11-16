@@ -1197,6 +1197,12 @@ public final class AvatarNode: ASDisplayNode {
     }
     
     public let contentNode: ContentNode
+    /// Opt in only at the three supported user-avatar surfaces. Other AvatarNodes stay plain.
+    public var snowHatDecorationEnabled = false {
+        didSet { self.updateSnowHatOverlay() }
+    }
+    private let snowHatIdentityLock = NSLock()
+    private var snowHatIdentityRevision: UInt64 = 0
     private var snowHatOverlay: SnowHatOverlayView?
     private var snowHatAccountID: Int64?
     private var snowHatPeerID: Int64?
@@ -1318,6 +1324,7 @@ public final class AvatarNode: ASDisplayNode {
     }
 
     private func bindSnowHat(accountPeerId: EnginePeer.Id, peer: EnginePeer?, overrideImage: AvatarNodeImageOverride?) {
+        guard self.snowHatDecorationEnabled else { return }
         // Service icons, groups and custom placeholders do not represent a user's avatar.
         let peerID: Int64?
         if let peer, peer.id.namespace == Namespaces.Peer.CloudUser, overrideImage == nil {
@@ -1329,21 +1336,30 @@ public final class AvatarNode: ASDisplayNode {
     }
 
     private func setSnowHatIdentity(accountID: Int64?, peerID: Int64?) {
-        guard Thread.isMainThread else {
-            DispatchQueue.main.async { [weak self] in
-                self?.setSnowHatIdentity(accountID: accountID, peerID: peerID)
-            }
-            return
+        self.snowHatIdentityLock.lock()
+        self.snowHatIdentityRevision &+= 1
+        let revision = self.snowHatIdentityRevision
+        self.snowHatIdentityLock.unlock()
+        let apply: () -> Void = { [weak self] in
+            guard let self else { return }
+            self.snowHatIdentityLock.lock()
+            let current = self.snowHatIdentityRevision == revision
+            self.snowHatIdentityLock.unlock()
+            guard current else { return }
+            self.snowHatAccountID = accountID
+            self.snowHatPeerID = peerID
+            self.updateSnowHatOverlay()
         }
-        guard self.snowHatAccountID != accountID || self.snowHatPeerID != peerID else { return }
-        self.snowHatAccountID = accountID
-        self.snowHatPeerID = peerID
-        self.updateSnowHatOverlay()
+        if Thread.isMainThread { apply() } else { DispatchQueue.main.async(execute: apply) }
     }
 
     private func updateSnowHatOverlay(size: CGSize? = nil) {
         guard Thread.isMainThread else {
-            DispatchQueue.main.async { [weak self] in self?.updateSnowHatOverlay(size: size) }
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                // A newer layout may have completed while this background work was queued.
+                self.updateSnowHatOverlay(size: self.bounds.size)
+            }
             return
         }
         if let size {
@@ -1351,15 +1367,16 @@ public final class AvatarNode: ASDisplayNode {
             self.snowHatSize = size
         }
         guard self.isNodeLoaded else { return }
-        if self.snowHatOverlay == nil, self.snowHatPeerID != nil {
+        if self.snowHatDecorationEnabled, self.snowHatOverlay == nil, self.snowHatPeerID != nil {
             let overlay = SnowHatOverlayView(frame: .zero)
             self.snowHatOverlay = overlay
             // A layer-only decoration also works for layer-backed AvatarNodes.
             // It is a sibling of contentNode, outside the photo/video's circular mask.
+            overlay.layer.zPosition = 0.01
             self.layer.addSublayer(overlay.layer)
         }
         if let overlay = self.snowHatOverlay {
-            overlay.configure(accountID: self.snowHatAccountID, peerID: self.snowHatPeerID)
+            overlay.configure(accountID: self.snowHatAccountID, peerID: self.snowHatDecorationEnabled ? self.snowHatPeerID : nil)
             let frame = CGRect(origin: .zero, size: self.snowHatSize ?? self.bounds.size)
             if overlay.frame != frame {
                 overlay.frame = frame
@@ -1584,6 +1601,7 @@ public final class AvatarNode: ASDisplayNode {
                 containerSize: indicatorSize
             )
             if let storyIndicatorView = storyIndicator.view {
+                storyIndicatorView.layer.zPosition = 0.02
                 if storyIndicatorView.superview == nil {
                     self.view.insertSubview(storyIndicatorView, aboveSubview: self.contentNode.view)
                 }

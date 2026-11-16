@@ -1,3 +1,23 @@
+# Этап5 — три поверхности аватарок и посадка шапок, 2026-11-16
+
+Один агент, исходное дерево чистое, ветка codex/winter-validation. VPS/сервер/API/master не менялись; IPA и тяжёлые сборки не запускались.
+
+Выбор остаётся в профиле → «Зимняя шапка», с отдельным локальным override по accountID+peerID из этапа4. Хранение/публикация не менялись. Все потребители используют SnowHatOverlayView → displayConfiguration; уведомления account+peer обновляют существующие слои при apply/remove без перезапуска. Существующие исходные10PNG-шапок в atlas и каталог снеговика не менялись.
+
+AvatarNode теперь default-off: явный opt-in только основная аватарка ChatListItem, ChatAvatarNavigationNode и PeerInfoAvatarTransformContainerNode. CloudUser/нет overrideImage остаётся обязательным условием; custom letters/служебные иконки сбрасывают identity. Большая текущая фотография в PeerInfoAvatarListNode уже имеет отдельный общий overlay; исторические/custom фото его не получают. Нет глобального подключения ко всем AvatarNode. Старые queued identity updates отброшены по lock-protected revision; queued background layout берёт актуальные bounds. Загрузка фото инициалов/фотографий остаётся штатной, отдельной асинхронной загрузки шапок нет.
+
+SnowHatGeometry: измеренные alpha-bounds каждого из10ресурсов с3px запасом, отдельные brim anchors и normalized widths; порог16/255 исключает низкоальфовый шум старого atlas. Ресурс alpha-composited на контрольный фон: нарисованных демонстрационных кругов/фона не видно; исходные RGB в прозрачных пикселях не считаются фоном. CGRect crop не включает большой прозрачный холст. Пропорции сохраняются; вращение учитывается в bounding box. Шапка ограничена верхней областью реального avatar square (x4–96%, y2–68%), включая крайние scale/offset/rotation, чтобы не заходить на соседние строки/кнопки и нижние badges. Нормализованные сохранённые значения не переписываются; крайние трансформации ограничиваются при отображении. Слой вне круглой маски фото, z выше видео, штатное кольцо историй выше шапки; касания отключены. Кеш максимум10изображений/4MB плюс прежний единичный atlas, без таймеров/покадровой работы.
+
+Реально проверено: python3 build-system/SnowEffect/check_avatar_hat_assets.py PASS —10точных alpha-bounds, защитные crop внутри atlas, прозрачные нижние openings, ссылка asset catalog. Контрольное alpha-compositing исходного atlas просмотрено (это НЕ screenshot приложения). Grammar parse8Swift-файлов PASS, git diff --check PASS. Точечная сверка3opt-ins/default-off/revision/story-layer source contracts PASS. Добавлены3XCTest:1080вариантов geometry (10шапок,38/60/100/280pt,scale/offset/rotation), normalized resize, live apply/removal и rebinding peer/account. Эти XCTest НЕ запущены; нет swift/xcrun/Apple SDK. Статические проверки не означают успешную компиляцию или визуальную готовность.
+
+Изменены: SnowHatOverlayView.swift; новый SnowHatGeometry.swift и SnowHatGeometryTests.swift; AvatarNode.swift; ChatListItem.swift; ChatAvatarNavigationNode.swift; PeerInfoAvatarTransformContainerNode.swift; PeerInfoAvatarListNode.swift; build-system/SnowEffect/check_avatar_hat_assets.py; этот файл.
+
+Осталось для macOS/iPhone: Swift compile/3XCTest;10шапок во всех3местах в светлой/тёмной теме, посадка по верхней дуге (новые anchors ещё требуют визуальной оценки), apply/change/remove при открытом чате, быстрый scroll/reuse,2аккаунта/перезапуск/смена фото/инициалы, профиль collapsed/expanded и переходы/видео/story-ring/online-badges, отсутствие перекрытия соседей, штатные tap/context actions. Нет UI-runtime/симулятора, сравнительных screenshots приложения и записи/оценки кадров по AGENTS.md: интерфейс/производительность/жесты не объявляются проверенными.
+
+Следующий конкретный шаг: целевой macOS //submodules/SnowEffect:SnowEffectTests и компиляция AvatarNode/ChatListUI/ChatAvatarNavigationNode/PeerInfoScreen, затем указанная UI-матрица на iPhone. Продолжение: git status --short; git log -1 --oneline; python3 build-system/SnowEffect/check_avatar_hat_assets.py. Обычный push отдельного коммита, без force/master.
+
+---
+
 # Этап4 — локальные шапки из профиля, 2026-11-16
 
 Один агент, ветка codex/winter-validation. Исходное дерево чистое; предыдущие этапы сохранены. Сервер/VPS/API/master не менялись, IPA/полная сборка не запускались.

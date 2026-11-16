@@ -65,6 +65,7 @@ public final class ChatAvatarNavigationNode: ASDisplayNode {
         self.containerNode = ContextControllerSourceNode()
         self.containerNode.isGestureEnabled = false
         self.avatarNode = AvatarNode(font: normalFont)
+        self.avatarNode.snowHatDecorationEnabled = true
         self.statusView = ComponentView()
         
         super.init()

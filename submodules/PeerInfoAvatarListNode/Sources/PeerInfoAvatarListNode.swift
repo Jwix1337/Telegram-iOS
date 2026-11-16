@@ -338,6 +338,7 @@ public final class PeerInfoAvatarListItemNode: ASDisplayNode {
             }
         }
         self.layer.addSublayer(self.hierarchyTrackingLayer)
+        self.snowHatOverlay.layer.zPosition = 0.01
         self.layer.addSublayer(self.snowHatOverlay.layer)
     }
     

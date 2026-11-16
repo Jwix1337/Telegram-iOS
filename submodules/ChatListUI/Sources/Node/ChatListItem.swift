@@ -1818,6 +1818,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
         self.communityAvatarBadgeBackgroundView = nil
         self.communityAvatarBadgeIconView = nil
         self.avatarNode = AvatarNode(font: avatarPlaceholderFont(size: 26.0))
+        self.avatarNode.snowHatDecorationEnabled = true
         
         self.highlightedBackgroundNode = ASDisplayNode()
         self.highlightedBackgroundNode.isLayerBacked = true

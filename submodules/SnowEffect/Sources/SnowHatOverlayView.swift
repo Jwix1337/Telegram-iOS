@@ -3,7 +3,12 @@ import UIKit
 
 /// Original reference artwork, without the example avatar circles, in the app's asset catalog.
 public enum SnowHatAssets {
-    private static let cache = NSCache<NSNumber, UIImage>()
+    private static let cache: NSCache<NSNumber, UIImage> = {
+        let cache = NSCache<NSNumber, UIImage>()
+        cache.countLimit = 10
+        cache.totalCostLimit = 4 * 1024 * 1024
+        return cache
+    }()
     private static let sheet = UIImage(named: "SnowHatSprite", in: .main, compatibleWith: nil)?.cgImage
 
     public static func image(for hatID: Int) -> UIImage? {
@@ -13,25 +18,14 @@ public enum SnowHatAssets {
         guard let sheet else { return nil }
         // Each rectangle includes the complete pompom/antlers and transparent edge padding.
         // The supplied collection's reading order is part of format v1, shared by all clients.
-        let regions: [CGRect] = [
-            CGRect(x: 0, y: 90, width: 312, height: 380),
-            CGRect(x: 312, y: 90, width: 308, height: 380),
-            CGRect(x: 620, y: 90, width: 292, height: 380),
-            CGRect(x: 912, y: 90, width: 303, height: 380),
-            CGRect(x: 1215, y: 90, width: 321, height: 380),
-            CGRect(x: 0, y: 550, width: 312, height: 370),
-            CGRect(x: 312, y: 550, width: 308, height: 370),
-            CGRect(x: 620, y: 550, width: 288, height: 370),
-            CGRect(x: 908, y: 550, width: 307, height: 370),
-            CGRect(x: 1215, y: 550, width: 321, height: 370)
-        ]
-        let region = regions[hatID - 1]
+        guard let artwork = SnowHatGeometry.artwork(hatID: hatID) else { return nil }
+        let region = artwork.crop
         let scaleX = CGFloat(sheet.width) / 1536.0
         let scaleY = CGFloat(sheet.height) / 1024.0
         let crop = CGRect(x: region.minX * scaleX, y: region.minY * scaleY, width: region.width * scaleX, height: region.height * scaleY).integral
         guard let cgImage = sheet.cropping(to: crop) else { return nil }
         let image = UIImage(cgImage: cgImage, scale: 1.0, orientation: .up)
-        self.cache.setObject(image, forKey: key)
+        self.cache.setObject(image, forKey: key, cost: cgImage.bytesPerRow * cgImage.height)
         return image
     }
 }
@@ -113,12 +107,11 @@ public final class SnowHatOverlayView: UIView {
         super.layoutSubviews()
         guard let configuration = self.configuration,
               let image = SnowHatAssets.image(for: configuration.hatID), image.size.width > 0.0 else { return }
-        let width = self.bounds.width * 1.08 * CGFloat(configuration.scale)
-        let height = width * image.size.height / image.size.width
+        guard let placement = SnowHatGeometry.placement(configuration: configuration, avatarBounds: self.bounds, imageSize: image.size) else { return }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        self.imageLayer.bounds = CGRect(x: 0.0, y: 0.0, width: width, height: height)
-        self.imageLayer.position = CGPoint(x: self.bounds.width * (0.5 + CGFloat(configuration.offsetX)), y: self.bounds.height * (0.5 + CGFloat(configuration.offsetY)))
+        self.imageLayer.bounds = CGRect(origin: .zero, size: placement.size)
+        self.imageLayer.position = placement.center
         self.imageLayer.setAffineTransform(CGAffineTransform(rotationAngle: CGFloat(configuration.rotation)))
         CATransaction.commit()
     }

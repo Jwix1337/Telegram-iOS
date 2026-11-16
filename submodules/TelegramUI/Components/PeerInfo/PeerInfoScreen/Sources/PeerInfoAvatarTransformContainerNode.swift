@@ -66,6 +66,7 @@ final class PeerInfoAvatarTransformContainerNode: ASDisplayNode {
         
         let avatarFont = avatarPlaceholderFont(size: floor(100.0 * 16.0 / 37.0))
         self.avatarNode = AvatarNode(font: avatarFont)
+        self.avatarNode.snowHatDecorationEnabled = true
         
         super.init()
         
