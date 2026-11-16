@@ -38,6 +38,7 @@ private final class ThemeSettingsControllerArguments {
     let openTextSize: () -> Void
     let openBubbleSettings: () -> Void
     let openSnowEffectSettings: () -> Void
+    let openSnowHatSettings: () -> Void
     let openPowerSavingSettings: () -> Void
     let openStickersAndEmoji: () -> Void
     let toggleSendWithCmdEnter: (Bool) -> Void
@@ -61,6 +62,7 @@ private final class ThemeSettingsControllerArguments {
         openTextSize: @escaping () -> Void,
         openBubbleSettings: @escaping () -> Void,
         openSnowEffectSettings: @escaping () -> Void,
+        openSnowHatSettings: @escaping () -> Void,
         openPowerSavingSettings: @escaping () -> Void,
         openStickersAndEmoji: @escaping () -> Void,
         toggleSendWithCmdEnter: @escaping (Bool) -> Void,
@@ -83,6 +85,7 @@ private final class ThemeSettingsControllerArguments {
         self.openTextSize = openTextSize
         self.openBubbleSettings = openBubbleSettings
         self.openSnowEffectSettings = openSnowEffectSettings
+        self.openSnowHatSettings = openSnowHatSettings
         self.openPowerSavingSettings = openPowerSavingSettings
         self.openStickersAndEmoji = openStickersAndEmoji
         self.toggleSendWithCmdEnter = toggleSendWithCmdEnter
@@ -143,6 +146,7 @@ private enum ThemeSettingsControllerEntry: ItemListNodeEntry {
     case iconItem(PresentationTheme, PresentationStrings, [PresentationAppIcon], Bool, String?)
     case snowEffect
     case powerSaving
+    case snowHats
     case stickersAndEmoji
     case otherHeader(PresentationTheme, String)
     case sendWithCmdEnter(PresentationTheme, String, Bool)
@@ -159,7 +163,7 @@ private enum ThemeSettingsControllerEntry: ItemListNodeEntry {
                 return ThemeSettingsControllerSection.message.rawValue
             case .iconHeader, .iconItem:
                 return ThemeSettingsControllerSection.icon.rawValue
-            case .snowEffect:
+            case .snowEffect, .snowHats:
                 return ThemeSettingsControllerSection.snowEffect.rawValue
             case .powerSaving, .stickersAndEmoji:
                 return ThemeSettingsControllerSection.message.rawValue
@@ -194,6 +198,8 @@ private enum ThemeSettingsControllerEntry: ItemListNodeEntry {
             return 10
         case .snowEffect:
             return 19
+        case .snowHats:
+            return 20
         case .powerSaving:
             return 11
         case .stickersAndEmoji:
@@ -295,6 +301,12 @@ private enum ThemeSettingsControllerEntry: ItemListNodeEntry {
                 }
             case .snowEffect:
                 if case .snowEffect = rhs {
+                    return true
+                } else {
+                    return false
+                }
+            case .snowHats:
+                if case .snowHats = rhs {
                     return true
                 } else {
                     return false
@@ -408,6 +420,10 @@ private enum ThemeSettingsControllerEntry: ItemListNodeEntry {
             case .snowEffect:
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: SnowEffectStrings(languageCode: presentationData.strings.baseLanguageCode).title, label: "", sectionId: self.section, style: .blocks, action: {
                     arguments.openSnowEffectSettings()
+                })
+            case .snowHats:
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: presentationData.strings.baseLanguageCode.lowercased().hasPrefix("ru") ? "Новогодние шапки" : "Holiday Hats", label: "", sectionId: self.section, style: .blocks, action: {
+                    arguments.openSnowHatSettings()
                 })
             case .powerSaving:
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: nil, title: presentationData.strings.AppearanceSettings_Animations, label: "", labelStyle: .text, sectionId: self.section, style: .blocks, disclosureStyle: .arrow, action: {
@@ -537,6 +553,7 @@ private func themeSettingsControllerEntries(
     entries.append(.showNextMediaOnTap(presentationData.theme, strings.Appearance_ShowNextMediaOnTap, mediaSettings.showNextMediaOnTap))
     entries.append(.showNextMediaOnTapInfo(presentationData.theme, strings.Appearance_ShowNextMediaOnTapInfo))
     entries.append(.snowEffect)
+    entries.append(.snowHats)
     
     return entries
 }
@@ -656,6 +673,8 @@ public func themeSettingsController(context: AccountContext, focusOnItemTag: The
         })
     }, openSnowEffectSettings: {
         pushControllerImpl?(snowEffectSettingsController(context: context))
+    }, openSnowHatSettings: {
+        pushControllerImpl?(snowHatEditorController(context: context))
     }, openPowerSavingSettings: {
         pushControllerImpl?(energySavingSettingsScreen(context: context))
     }, openStickersAndEmoji: {

@@ -21,6 +21,11 @@ public final class SnowEffectView: UIView {
     private var applicationIsActive: Bool
     private var appliedPlan: SnowEffectRenderPlan?
     private var seasonTimer: Timer?
+    private var particlesLayer: CALayer?
+
+    // Shared textures are drawn once, rather than drawing an image for every particle.
+    private static let darkCrystals = (0 ..< 5).compactMap { makeCrystal(color: .white, variant: $0) }
+    private static let lightCrystals = (0 ..< 5).compactMap { makeCrystal(color: UIColor(red: 0.84, green: 0.92, blue: 0.98, alpha: 1.0), variant: $0) }
 
     public override init(frame: CGRect) {
         self.applicationIsActive = UIApplication.shared.applicationState == .active
@@ -114,7 +119,8 @@ public final class SnowEffectView: UIView {
         self.appliedPlan = plan
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        self.layer.sublayers?.forEach { $0.removeFromSuperlayer() }
+        self.particlesLayer?.removeFromSuperlayer()
+        self.particlesLayer = nil
         if let plan {
             self.populate(plan)
         }
@@ -122,15 +128,30 @@ public final class SnowEffectView: UIView {
     }
 
     private func populate(_ plan: SnowEffectRenderPlan) {
-        let color = self.isDark ? UIColor.white : UIColor(red: 0.48, green: 0.58, blue: 0.67, alpha: 1.0)
+        let color = self.isDark ? UIColor.white : UIColor(red: 0.84, green: 0.92, blue: 0.98, alpha: 1.0)
+        let crystals = self.isDark ? Self.darkCrystals : Self.lightCrystals
+        let container = CALayer()
+        container.frame = self.bounds
+        self.layer.addSublayer(container)
+        self.particlesLayer = container
+
         for _ in 0 ..< plan.particleCount {
-            let diameter = CGFloat.random(in: 1.5 ... 3.5) * CGFloat(plan.size)
+            let crystal = Int.random(in: 0 ..< 6) > 0 ? crystals.randomElement() : nil
+            let isForeground = Int.random(in: 0 ..< 3) == 0
+            let diameter = (crystal != nil
+                ? (isForeground ? CGFloat.random(in: 7.0 ... 13.0) : CGFloat.random(in: 4.0 ... 7.0))
+                : CGFloat.random(in: 1.8 ... 3.2)) * CGFloat(plan.size)
             let particle = CALayer()
             particle.bounds = CGRect(x: 0.0, y: 0.0, width: diameter, height: diameter)
-            particle.cornerRadius = diameter * 0.5
-            particle.backgroundColor = color.cgColor
+            if let crystal {
+                particle.contents = crystal
+                particle.contentsGravity = .resizeAspect
+            } else {
+                particle.cornerRadius = diameter * 0.5
+                particle.backgroundColor = color.cgColor
+            }
             particle.opacity = 0.0
-            self.layer.addSublayer(particle)
+            container.addSublayer(particle)
 
             let duration = Double(plan.viewport.height + 24.0) / (Double.random(in: 35.0 ... 68.0) * plan.speed)
             let startX = CGFloat.random(in: -20.0 ... plan.viewport.width + 20.0)
@@ -153,13 +174,18 @@ public final class SnowEffectView: UIView {
             vertical.duration = duration
 
             let opacity = CAKeyframeAnimation(keyPath: "opacity")
-            let peak = Float.random(in: 0.3 ... 0.8)
+            let peak = Float.random(in: 0.5 ... 0.95)
             opacity.values = [0.0, peak, peak, 0.0]
             opacity.keyTimes = [0.0, 0.06, 0.86, 1.0]
             opacity.duration = duration
 
             let group = CAAnimationGroup()
-            group.animations = [horizontal, vertical, opacity]
+            let rotation = CABasicAnimation(keyPath: "transform.rotation.z")
+            let angle = Double.random(in: -.pi ... .pi)
+            rotation.fromValue = angle
+            rotation.toValue = angle + Double.random(in: -1.5 ... 1.5)
+            rotation.duration = duration
+            group.animations = [horizontal, vertical, opacity, rotation]
             group.duration = duration
             group.timingFunction = CAMediaTimingFunction(name: .linear)
             group.repeatCount = .greatestFiniteMagnitude
@@ -168,5 +194,60 @@ public final class SnowEffectView: UIView {
             group.timeOffset = Double.random(in: 0.0 ..< duration)
             particle.add(group, forKey: "snowfall")
         }
+
+        // Randomized progress fills the chat; fade the population in as a whole so
+        // enabling the effect or resizing the chat never flashes a screen of flakes.
+        let appearance = CABasicAnimation(keyPath: "opacity")
+        appearance.fromValue = 0.0
+        appearance.toValue = 1.0
+        appearance.duration = 0.45
+        container.add(appearance, forKey: "appearance")
+    }
+
+    private static func makeCrystal(color: UIColor, variant: Int) -> CGImage? {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 2.0
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: CGSize(width: 48.0, height: 48.0), format: format).image { context in
+            let canvas = context.cgContext
+            canvas.setStrokeColor(color.cgColor)
+            canvas.setFillColor(color.withAlphaComponent(0.82).cgColor)
+            canvas.setLineWidth(variant == 3 ? 1.8 : 2.8)
+            canvas.setLineCap(.round)
+            canvas.setLineJoin(.round)
+            // Baked into the shared texture: a faint soft edge, without per-layer shadows.
+            canvas.setShadow(offset: CGSize(width: 0.0, height: 0.5), blur: 2.0, color: UIColor(red: 0.12, green: 0.2, blue: 0.28, alpha: 0.25).cgColor)
+            canvas.translateBy(x: 24.0, y: 24.0)
+            for _ in 0 ..< 6 {
+                canvas.move(to: .zero)
+                canvas.addLine(to: CGPoint(x: 0.0, y: variant == 4 ? -14.0 : -19.0))
+                if variant == 0 || variant == 1 {
+                    canvas.move(to: CGPoint(x: -5.5, y: -15.0))
+                    canvas.addLine(to: CGPoint(x: 0.0, y: -10.0))
+                    canvas.addLine(to: CGPoint(x: 5.5, y: -15.0))
+                }
+                if variant == 0 || variant == 4 {
+                    canvas.move(to: CGPoint(x: -3.5, y: -8.5))
+                    canvas.addLine(to: CGPoint(x: 0.0, y: -5.0))
+                    canvas.addLine(to: CGPoint(x: 3.5, y: -8.5))
+                }
+                if variant == 2 || variant == 3 {
+                    let branch: CGFloat = variant == 3 ? 3.5 : 5.0
+                    canvas.move(to: CGPoint(x: -branch, y: -16.0))
+                    canvas.addLine(to: CGPoint(x: 0.0, y: -12.0))
+                    canvas.addLine(to: CGPoint(x: branch, y: -16.0))
+                }
+                canvas.strokePath()
+                if variant == 4 {
+                    canvas.move(to: CGPoint(x: 0.0, y: -21.0))
+                    canvas.addLine(to: CGPoint(x: 3.5, y: -17.0))
+                    canvas.addLine(to: CGPoint(x: 0.0, y: -13.0))
+                    canvas.addLine(to: CGPoint(x: -3.5, y: -17.0))
+                    canvas.closePath()
+                    canvas.drawPath(using: .fillStroke)
+                }
+                canvas.rotate(by: .pi / 3.0)
+            }
+        }.cgImage
     }
 }

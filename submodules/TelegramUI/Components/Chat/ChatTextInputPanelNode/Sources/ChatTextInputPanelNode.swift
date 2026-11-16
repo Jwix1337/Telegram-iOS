@@ -205,6 +205,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     public var contextPlaceholderNode: TextNode?
     public var slowmodePlaceholderNode: ChatTextInputSlowmodePlaceholderNode?
     private let textInputContainerBackgroundView: GlassBackgroundView
+
+    /// A zero-height decoration host at the actual field's top edge; it never intercepts field touches.
+    public let snowAccumulationAnchorView = UIView()
     // Bubble-free mode only: the "next channel" island growing out of the text field, while a topic is pulled up.
     private var overscrollIsland: ChatOverscrollIslandHost?
     private let accessoryPanelContainer: UIView
@@ -1044,6 +1047,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.glassBackgroundContainer.contentView.addSubview(self.textInputBackgroundNode.view)
         
         self.glassBackgroundContainer.contentView.addSubview(self.textInputContainerBackgroundView)
+        // The glass group has a zero origin. Keep the decoration alongside it so
+        // native glass compositing cannot clip snow extending above the field.
+        self.view.addSubview(self.snowAccumulationAnchorView)
         
         self.textInputContainerBackgroundView.contentView.addSubview(self.accessoryPanelContainer)
         self.textInputContainerBackgroundView.contentView.addSubview(self.textPlaceholderNode.view)
@@ -3341,6 +3347,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         transition.updateFrame(view: self.accessoryPanelContainer, frame: CGRect(origin: CGPoint(), size: textInputContainerBackgroundFrame.size))
         transition.updateFrame(view: self.textInputContainerBackgroundView, frame: textInputContainerBackgroundFrame)
+        transition.updateFrame(view: self.snowAccumulationAnchorView, frame: CGRect(origin: textInputContainerBackgroundFrame.origin, size: CGSize(width: textInputContainerBackgroundFrame.width, height: 0.0)))
         
         self.updateCounterTextNode(backgroundSize: textInputContainerBackgroundFrame.size, transition: transition)
         

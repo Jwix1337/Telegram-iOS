@@ -97,6 +97,15 @@ final class SnowEffectTests: XCTestCase {
             settings.intensity = .heavy
             settings.speed = .slow
             settings.size = .large
+            settings.accumulationEnabled = false
+            settings.accumulationSpeed = .fast
+            settings.maximumSnowHeight = .large
+            settings.shakeToClear = false
+            settings.swipeToClear = false
+            settings.winterSnowballsEnabled = false
+            settings.winterReceiveSnowballs = false
+            settings.winterSnowmanEnabled = false
+            settings.winterAnimationsEnabled = false
         }
         store.update { _ in }
         self.wait(for: [changed], timeout: 1.0)
@@ -106,6 +115,50 @@ final class SnowEffectTests: XCTestCase {
         XCTAssertEqual(store.settings.intensity, .heavy)
         XCTAssertEqual(store.settings.speed, .slow)
         XCTAssertEqual(store.settings.size, .large)
+        XCTAssertFalse(store.settings.accumulationEnabled)
+        XCTAssertEqual(store.settings.accumulationSpeed, .fast)
+        XCTAssertEqual(store.settings.maximumSnowHeight, .large)
+        XCTAssertFalse(store.settings.shakeToClear)
+        XCTAssertFalse(store.settings.swipeToClear)
+        XCTAssertFalse(store.settings.winterSnowballsEnabled)
+        XCTAssertFalse(store.settings.winterReceiveSnowballs)
+        XCTAssertFalse(store.settings.winterSnowmanEnabled)
+        XCTAssertFalse(store.settings.winterAnimationsEnabled)
+    }
+
+    func testLegacyPreferencesKeepExistingValuesAndDefaultNewFields() throws {
+        let legacy = Data("{\"enabled\":true,\"seasonal\":true,\"intensity\":2,\"speed\":0.65,\"size\":1.35}".utf8)
+        let suite = "SnowEffectTests." + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(legacy, forKey: "SnowEffect.settings.v1")
+        let settings = SnowEffectPreferences(defaults: defaults).settings
+        XCTAssertTrue(settings.enabled)
+        XCTAssertTrue(settings.seasonal)
+        XCTAssertEqual(settings.intensity, .heavy)
+        XCTAssertEqual(settings.speed, .slow)
+        XCTAssertEqual(settings.size, .large)
+        XCTAssertTrue(settings.accumulationEnabled)
+        XCTAssertEqual(settings.accumulationSpeed, .normal)
+        XCTAssertEqual(settings.maximumSnowHeight, .medium)
+        XCTAssertTrue(settings.shakeToClear)
+        XCTAssertTrue(settings.swipeToClear)
+        XCTAssertTrue(settings.winterSnowballsEnabled)
+        XCTAssertTrue(settings.winterReceiveSnowballs)
+        XCTAssertTrue(settings.winterSnowmanEnabled)
+        XCTAssertTrue(settings.winterAnimationsEnabled)
+    }
+
+    func testEveryAccumulationOptionSurvivesEncoding() throws {
+        for speed in SnowEffectSettings.AccumulationSpeed.allCases {
+            for height in SnowEffectSettings.MaximumSnowHeight.allCases {
+                var settings = SnowEffectSettings()
+                settings.accumulationSpeed = speed
+                settings.maximumSnowHeight = height
+                let data = try JSONEncoder().encode(settings)
+                XCTAssertEqual(try JSONDecoder().decode(SnowEffectSettings.self, from: data), settings)
+            }
+        }
     }
 
     func testMissingFieldsAndCorruptStorageFailSafely() throws {
@@ -117,6 +170,18 @@ final class SnowEffectTests: XCTestCase {
         for corrupt in ["not JSON", "{\"enabled\":true,\"intensity\":999}", "{\"enabled\":true,\"speed\":-100}"] {
             defaults.set(Data(corrupt.utf8), forKey: "SnowEffect.settings.v1")
             XCTAssertEqual(SnowEffectPreferences(defaults: defaults).settings, SnowEffectSettings())
+        }
+    }
+
+    func testEveryWinterInteractionSettingSurvivesEncoding() throws {
+        for bits in 0 ..< 16 {
+            var settings = SnowEffectSettings()
+            settings.winterSnowballsEnabled = bits & 1 != 0
+            settings.winterReceiveSnowballs = bits & 2 != 0
+            settings.winterSnowmanEnabled = bits & 4 != 0
+            settings.winterAnimationsEnabled = bits & 8 != 0
+            let data = try JSONEncoder().encode(settings)
+            XCTAssertEqual(try JSONDecoder().decode(SnowEffectSettings.self, from: data), settings)
         }
     }
 }

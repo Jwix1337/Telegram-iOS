@@ -1107,6 +1107,19 @@ gets a shrunk test before its fix. The comparison with master, and every model r
 
 ## Pointers
 
+### Incoming message consumers
+
+`AccountStateManager.incomingMessages` fans out the committed messages from the existing
+`addedIncomingMessageIds` dispatch transaction, independently of notification filtering. It adds no
+network calls and does not alter replay, read state, notification decisions, or operation ordering.
+Telegram Snow uses this account-scoped stream through `WinterEventTransport` to validate explicitly
+published, visible direct-message hats, snowballs and shared snowman actions. Forwarded/group/channel
+messages are rejected outside TelegramCore. Confirmed outgoing events are persisted before a single
+account bridge enqueues ordinary Telegram messages; no automatic acknowledgments are sent. The stream is
+transient; accepted settings, event IDs, pending actions and sessions are persisted by that consumer.
+History already present before subscription
+is not replayed by this signal. iOS state-sync regression tests have not been run in the Linux workspace.
+
 - `docs/state-sync-audit-2026-10.md`: the dated audit (issue ids, the original cost model).
 - `docs/superpowers/specs/2026-10-14-state-sync-refactor-design.md` (design, Constraints) and
   `docs/superpowers/specs/2026-10-15-difference-too-long-design.md` (the differenceTooLong rules).

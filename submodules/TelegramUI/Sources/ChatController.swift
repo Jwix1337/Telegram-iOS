@@ -246,6 +246,9 @@ struct ScrolledToMessageId: Equatable {
 
 public final class ChatControllerImpl: TelegramBaseController, ChatController, GalleryHiddenMediaTarget, UIDropInteractionDelegate {    
     private var snowEffectView: SnowEffectView?
+    private var snowScreenIsVisible = false
+    private var winterInteractions: WinterChatInteractions?
+    private var winterInteractionPeerID: EnginePeer.Id?
     var validLayout: ContainerViewLayout?
     
     public weak var parentController: ViewController?
@@ -7199,6 +7202,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     }
 
     deinit {
+        NotificationCenter.default.removeObserver(self, name: UIResponder.keyboardDidHideNotification, object: nil)
         let _ = ChatControllerCount.modify { value in
             return value - 1
         }
@@ -7301,6 +7305,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         self.updateChatPresentationInterfaceState(animated: false, interactive: false, {
             return $0.updatedMode(mode)
         })
+        if self.snowScreenIsVisible {
+            self.updateSnowEffects()
+        }
     }
     
     func animateFromPreviewing(transition: ContainedViewLayoutTransition = .animated(duration: 0.4, curve: .spring)) {
@@ -7985,17 +7992,95 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         }
     }
 
-    override public func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
+    private var snowEffectsAllowed: Bool {
+        guard case .standard(.default) = self.mode, !self.alwaysShowSearchResultsAsList else {
+            return false
+        }
+        if case .customChatContents = self.chatLocation {
+            return false
+        }
+        return true
+    }
 
-        if self.snowEffectView == nil {
+    override public var canBecomeFirstResponder: Bool {
+        return true
+    }
+
+    @objc private func restoreSnowShakeResponder() {
+        let settings = SnowEffectPreferences.shared.settings
+        if self.snowScreenIsVisible, self.snowEffectsAllowed, settings.enabled, settings.shakeToClear,
+           self.view.window?.findFirstResponder() == nil {
+            let _ = self.becomeFirstResponder()
+        }
+    }
+
+    override public func motionEnded(_ motion: UIEvent.EventSubtype, with event: UIEvent?) {
+        if motion == .motionShake, self.snowEffectsAllowed {
+            self.chatDisplayNode.clearSnowFromShake()
+        }
+        super.motionEnded(motion, with: event)
+    }
+
+    private func updateSnowEffects() {
+        if self.snowEffectsAllowed, self.snowEffectView == nil {
             let snowEffectView = SnowEffectView(frame: self.displayNode.view.bounds)
             snowEffectView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             self.displayNode.view.addSubview(snowEffectView)
             self.snowEffectView = snowEffectView
         }
         self.snowEffectView?.isDark = self.presentationData.theme.overallDarkAppearance
-        self.snowEffectView?.isEffectVisible = true
+        self.snowEffectView?.isEffectVisible = self.snowEffectsAllowed
+        self.chatDisplayNode.setSnowEffectVisible(self.snowEffectsAllowed)
+        self.restoreSnowShakeResponder()
+        self.updateWinterInteractions()
+    }
+
+    private func updateWinterInteractions() {
+        guard self.snowScreenIsVisible, self.snowEffectsAllowed,
+              case let .peer(peerID) = self.chatLocation,
+              peerID.namespace == Namespaces.Peer.CloudUser, peerID != self.context.account.peerId,
+              let user = self.presentationInterfaceState.renderedPeer?.peer as? TelegramUser,
+              user.botInfo == nil else {
+            self.winterInteractions?.setVisible(false)
+            return
+        }
+        if case .scheduledMessages = self.subject {
+            self.winterInteractions?.setVisible(false)
+            return
+        }
+        if self.winterInteractionPeerID != peerID {
+            self.winterInteractions?.setVisible(false)
+            self.winterInteractions = WinterChatInteractions(context: self.context, peerID: peerID, host: self, sendImage: { [weak self] image in
+                self?.sendWinterSnowmanImage(image)
+            })
+            self.winterInteractionPeerID = peerID
+        }
+        self.winterInteractions?.setVisible(true)
+    }
+
+    private func sendWinterSnowmanImage(_ image: UIImage) {
+        // Encoding and resource storage are outside the UI thread. The existing message
+        // sender owns the actual photo upload; profile photographs are never modified.
+        let context = self.context
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let data = image.jpegData(compressionQuality: 0.92), let cgImage = image.cgImage else { return }
+            let resource = LocalFileMediaResource(fileId: Int64.random(in: Int64.min ... Int64.max))
+            context.account.postbox.mediaBox.storeResourceData(resource.id, data: data)
+            let representation = TelegramMediaImageRepresentation(dimensions: PixelDimensions(width: Int32(cgImage.width), height: Int32(cgImage.height)), resource: resource, progressiveSizes: [], immediateThumbnailData: nil)
+            let media = TelegramMediaImage(imageId: MediaId(namespace: Namespaces.Media.LocalImage, id: Int64.random(in: Int64.min ... Int64.max)), representations: [representation], immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: [])
+            DispatchQueue.main.async { [weak self] in
+                self?.sendMessages([.message(text: "⛄", attributes: [], inlineStickers: [:], mediaReference: .standalone(media: media), threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])], media: true)
+            }
+        }
+    }
+
+    override public func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+
+        self.snowScreenIsVisible = true
+        self.updateSnowEffects()
+        NotificationCenter.default.removeObserver(self, name: UIResponder.keyboardDidHideNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(self.restoreSnowShakeResponder), name: UIResponder.keyboardDidHideNotification, object: nil)
         self.forwardSideListAppearance(.didAppear, animated: animated)
         
         self.didAppear = true
@@ -8448,7 +8533,14 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     
     override public func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        self.snowScreenIsVisible = false
+        NotificationCenter.default.removeObserver(self, name: UIResponder.keyboardDidHideNotification, object: nil)
         self.snowEffectView?.isEffectVisible = false
+        self.winterInteractions?.setVisible(false)
+        self.chatDisplayNode.setSnowEffectVisible(false)
+        if self.isFirstResponder {
+            let _ = self.resignFirstResponder()
+        }
         self.forwardSideListAppearance(.willDisappear, animated: animated)
 
         self.walletTransferAnimationsVisible = false
@@ -8610,6 +8702,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         }
         
         self.validLayout = layout
+        self.updateWinterInteractions()
         
         switch self.presentationInterfaceState.mode {
         case .standard, .inline:

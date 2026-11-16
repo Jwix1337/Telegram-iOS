@@ -1,0 +1,24 @@
+name: Winter model checks
+on:
+  workflow_dispatch:
+  push:
+    branches: ['codex/winter-validation']
+  pull_request:
+    paths:
+      - 'submodules/SnowEffect/**'
+      - 'build-system/SnowEffect/test_winter_models.py'
+      - '.github/workflows/winter-model-tests.yml'
+permissions:
+  contents: read
+jobs:
+  models:
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Compile and test actual Foundation models
+        run: python3 build-system/SnowEffect/test_winter_models.py
+      - name: Parse SnowEffect UIKit sources without building Telegram
+        run: swiftc -frontend -parse submodules/SnowEffect/Sources/*.swift

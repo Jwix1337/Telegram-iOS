@@ -216,6 +216,10 @@ public final class AccountStateManager {
         public var notificationMessages: Signal<[([Message], PeerGroupId, Bool, MessageHistoryThreadData?)], NoError> {
             return self.eventHub.notificationMessages
         }
+
+        public var incomingMessages: Signal<[Message], NoError> {
+            return self.eventHub.incomingMessages
+        }
         
         public var reactionNotifications: Signal<[(reactionAuthor: Peer, reaction: MessageReaction.Reaction, message: Message, timestamp: Int32)], NoError> {
             return self.eventHub.reactionNotifications
@@ -961,6 +965,13 @@ public final class AccountStateManager {
     public var notificationMessages: Signal<[([Message], PeerGroupId, Bool, MessageHistoryThreadData?)], NoError> {
         return self.impl.signalWith { impl, subscriber in
             return impl.notificationMessages.start(next: subscriber.putNext, error: subscriber.putError, completed: subscriber.putCompletion)
+        }
+    }
+
+    /// Committed incoming messages even when muted or already read; no network requests are added.
+    public var incomingMessages: Signal<[Message], NoError> {
+        return self.impl.signalWith { impl, subscriber in
+            return impl.incomingMessages.start(next: subscriber.putNext, error: subscriber.putError, completed: subscriber.putCompletion)
         }
     }
     

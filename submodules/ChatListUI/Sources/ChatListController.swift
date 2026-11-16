@@ -1,5 +1,4 @@
 import Foundation
-import SnowEffect
 import UIKit
 import Postbox
 import SwiftSignalKit
@@ -101,7 +100,6 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         return false
     }
     
-    private var snowEffectView: SnowEffectView?
     private var validLayout: ContainerViewLayout?
     
     public let context: AccountContext
@@ -519,7 +517,6 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 let previousStrings = strongSelf.presentationData.strings
                 
                 strongSelf.presentationData = presentationData
-                strongSelf.snowEffectView?.isDark = presentationData.theme.overallDarkAppearance
                 strongSelf.presentationDataValue.set(.single(presentationData))
                 
                 if previousTheme !== presentationData.theme || previousStrings !== presentationData.strings {
@@ -2451,14 +2448,6 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
 
-        if self.snowEffectView == nil {
-            let snowEffectView = SnowEffectView(frame: self.displayNode.view.bounds)
-            snowEffectView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            self.displayNode.view.addSubview(snowEffectView)
-            self.snowEffectView = snowEffectView
-        }
-        self.snowEffectView?.isDark = self.presentationData.theme.overallDarkAppearance
-        self.snowEffectView?.isEffectVisible = true
                 
         if self.powerSavingMonitoringDisposable == nil {
             self.powerSavingMonitoringDisposable = (self.context.sharedContext.automaticMediaDownloadSettings
@@ -2941,7 +2930,6 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     
     override public func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        self.snowEffectView?.isEffectVisible = false
         
         self.chatListDisplayNode.mainContainerNode.updateEnableAdjacentFilterLoading(false)
         

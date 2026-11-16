@@ -14,6 +14,7 @@ import Accelerate
 import ComponentFlow
 import AvatarStoryIndicatorComponent
 import DirectMediaImageCache
+import SnowEffect
 
 private let deletedIcon = UIImage(bundleImageName: "Avatar/DeletedIcon")?.precomposed()
 private let phoneIcon = generateTintedImage(image: UIImage(bundleImageName: "Avatar/PhoneIcon"), color: .white)
@@ -1196,6 +1197,10 @@ public final class AvatarNode: ASDisplayNode {
     }
     
     public let contentNode: ContentNode
+    private var snowHatOverlay: SnowHatOverlayView?
+    private var snowHatAccountID: Int64?
+    private var snowHatPeerID: Int64?
+    private var snowHatSize: CGSize?
     private var storyIndicator: ComponentView<Empty>?
     public private(set) var storyPresentationParams: StoryPresentationParams?
     
@@ -1275,6 +1280,7 @@ public final class AvatarNode: ASDisplayNode {
                 return
             }
             self.updateStoryIndicator(transition: .immediate)
+            self.updateSnowHatOverlay()
         }
         
         self.addSubnode(self.contentNode)
@@ -1308,6 +1314,58 @@ public final class AvatarNode: ASDisplayNode {
         self.contentNode.updateSize(size: size)
         
         self.updateStoryIndicator(transition: .immediate)
+        self.updateSnowHatOverlay(size: size)
+    }
+
+    private func bindSnowHat(accountPeerId: EnginePeer.Id, peer: EnginePeer?, overrideImage: AvatarNodeImageOverride?) {
+        // Service icons, groups and custom placeholders do not represent a user's avatar.
+        let peerID: Int64?
+        if let peer, peer.id.namespace == Namespaces.Peer.CloudUser, overrideImage == nil {
+            peerID = peer.id.toInt64()
+        } else {
+            peerID = nil
+        }
+        self.setSnowHatIdentity(accountID: accountPeerId.toInt64(), peerID: peerID)
+    }
+
+    private func setSnowHatIdentity(accountID: Int64?, peerID: Int64?) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.setSnowHatIdentity(accountID: accountID, peerID: peerID)
+            }
+            return
+        }
+        guard self.snowHatAccountID != accountID || self.snowHatPeerID != peerID else { return }
+        self.snowHatAccountID = accountID
+        self.snowHatPeerID = peerID
+        self.updateSnowHatOverlay()
+    }
+
+    private func updateSnowHatOverlay(size: CGSize? = nil) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.updateSnowHatOverlay(size: size) }
+            return
+        }
+        if let size {
+            // updateSize can run before the parent assigns the node's frame.
+            self.snowHatSize = size
+        }
+        guard self.isNodeLoaded else { return }
+        if self.snowHatOverlay == nil, self.snowHatPeerID != nil {
+            let overlay = SnowHatOverlayView(frame: .zero)
+            self.snowHatOverlay = overlay
+            // A layer-only decoration also works for layer-backed AvatarNodes.
+            // It is a sibling of contentNode, outside the photo/video's circular mask.
+            self.layer.addSublayer(overlay.layer)
+        }
+        if let overlay = self.snowHatOverlay {
+            overlay.configure(accountID: self.snowHatAccountID, peerID: self.snowHatPeerID)
+            let frame = CGRect(origin: .zero, size: self.snowHatSize ?? self.bounds.size)
+            if overlay.frame != frame {
+                overlay.frame = frame
+                overlay.layoutIfNeeded()
+            }
+        }
     }
     
     public func playArchiveAnimation() {
@@ -1337,6 +1395,7 @@ public final class AvatarNode: ASDisplayNode {
         displayDimensions: CGSize = CGSize(width: 60.0, height: 60.0),
         storeUnrounded: Bool = false
     ) {
+        self.bindSnowHat(accountPeerId: accountPeerId, peer: peer, overrideImage: overrideImage)
         self.contentNode.setPeer(
             accountPeerId: accountPeerId,
             postbox: postbox,
@@ -1366,6 +1425,7 @@ public final class AvatarNode: ASDisplayNode {
         displayDimensions: CGSize = CGSize(width: 60.0, height: 60.0),
         storeUnrounded: Bool = false
     ) {
+        self.bindSnowHat(accountPeerId: genericContext.account.peerId, peer: peer, overrideImage: overrideImage)
         self.contentNode.setPeerV2(
             context: genericContext,
             theme: theme,
@@ -1394,6 +1454,7 @@ public final class AvatarNode: ASDisplayNode {
         storeUnrounded: Bool = false,
         cutoutRect: CGRect? = nil
     ) {
+        self.bindSnowHat(accountPeerId: (account ?? context.account).peerId, peer: peer, overrideImage: overrideImage)
         self.contentNode.setPeer(
             context: context,
             account: account,
@@ -1411,6 +1472,7 @@ public final class AvatarNode: ASDisplayNode {
     }
     
     public func setCustomLetters(_ letters: [String], explicitColor: AvatarNodeColorOverride? = nil, icon: AvatarNodeExplicitIcon? = nil) {
+        self.setSnowHatIdentity(accountID: nil, peerID: nil)
         self.contentNode.setCustomLetters(letters, explicitColor: explicitColor, icon: icon)
     }
     

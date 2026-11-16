@@ -20,6 +20,7 @@ import ComponentFlow
 import ComponentDisplayAdapters
 import StorySetIndicatorComponent
 import HierarchyTrackingLayer
+import SnowEffect
 
 private class PeerInfoAvatarListLoadingStripNode: ASImageNode {
     private var currentInHierarchy = false
@@ -210,6 +211,7 @@ public final class PeerInfoAvatarListItemNode: ASDisplayNode {
     private let context: AccountContext
     private let peer: EnginePeer
     public let imageNode: TransformImageNode
+    private let snowHatOverlay = SnowHatOverlayView(frame: .zero)
     private var videoNode: UniversalVideoNode?
     private var videoContent: NativeVideoContent?
     private var videoStartTimestamp: Double?
@@ -336,6 +338,7 @@ public final class PeerInfoAvatarListItemNode: ASDisplayNode {
             }
         }
         self.layer.addSublayer(self.hierarchyTrackingLayer)
+        self.layer.addSublayer(self.snowHatOverlay.layer)
     }
     
     deinit {
@@ -465,6 +468,14 @@ public final class PeerInfoAvatarListItemNode: ASDisplayNode {
         let previousItem = self.item
         self.item = item
         self.progress = progress
+        // Only the current profile photo carries the user's decoration, never historic photos.
+        let showsHat: Bool
+        if case .custom = item {
+            showsHat = false
+        } else {
+            showsHat = isMain && self.peer.id.namespace == Namespaces.Peer.CloudUser
+        }
+        self.snowHatOverlay.configure(accountID: self.context.account.peerId.toInt64(), peerID: showsHat ? self.peer.id.toInt64() : nil)
         
         var fullSizeOnly = fullSizeOnly
         if let previousItem = previousItem, previousItem.isSemanticallyEqual(to: item) && self.didSetReady && isMain {
@@ -581,6 +592,8 @@ public final class PeerInfoAvatarListItemNode: ASDisplayNode {
         let _ = applyLayout()
         let imageFrame = CGRect(origin: CGPoint(x: floor((size.width - imageSize.width) / 2.0), y: floor((size.height - imageSize.height) / 2.0)), size: imageSize)
         transition.updateFrame(node: self.imageNode, frame: imageFrame)
+        transition.updateFrame(view: self.snowHatOverlay, frame: imageFrame)
+        self.snowHatOverlay.layoutIfNeeded()
         
         transition.updateFrame(node: self.statusNode, frame: CGRect(origin: CGPoint(x: floor((size.width - 50.0) / 2.0), y: floor((size.height - 50.0) / 2.0)), size: CGSize(width: 50.0, height: 50.0)))
         

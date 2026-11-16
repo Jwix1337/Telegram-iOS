@@ -60,6 +60,12 @@ final class AccountStateEventHub {
         return self.notificationMessagesPipe.signal()
     }
 
+    // Unfiltered committed incoming messages, independent of notification/mute/read settings.
+    private let incomingMessagesPipe = ValuePipe<[Message]>()
+    var incomingMessages: Signal<[Message], NoError> {
+        return self.incomingMessagesPipe.signal()
+    }
+
     private let reactionNotificationsPipe = ValuePipe<[(reactionAuthor: Peer, reaction: MessageReaction.Reaction, message: Message, timestamp: Int32)]>()
     var reactionNotifications: Signal<[(reactionAuthor: Peer, reaction: MessageReaction.Reaction, message: Message, timestamp: Int32)], NoError> {
         return self.reactionNotificationsPipe.signal()
@@ -228,10 +234,14 @@ final class AccountStateEventHub {
     /// result reaches `notificationMessages` on the queue and is followed there by `completed`, then hands the
     /// events that need no storage read to their pipes.
     func dispatch(_ events: AccountFinalStateEvents, completed: @escaping () -> Void) {
-        let signal = self.postbox.transaction { transaction -> [([Message], PeerGroupId, Bool, MessageHistoryThreadData?)] in
+        let signal = self.postbox.transaction { transaction -> (notifications: [([Message], PeerGroupId, Bool, MessageHistoryThreadData?)], incoming: [Message]) in
             var messageList: [([Message], PeerGroupId, Bool, MessageHistoryThreadData?)] = []
+            var incomingMessages: [Message] = []
 
             for id in events.addedIncomingMessageIds {
+                if let message = transaction.getMessage(id) {
+                    incomingMessages.append(message)
+                }
                 let (messages, notify, _, _, threadData) = messagesForNotification(transaction: transaction, id: id, alwaysReturnMessage: false)
                 if !messages.isEmpty {
                     messageList.append((messages, .root, notify, threadData))
@@ -255,13 +265,16 @@ final class AccountStateEventHub {
                 }
                 messageList.append((wasScheduledMessages, .root, true, threadData))
             }
-            return messageList
+            return (messageList, incomingMessages)
         }
 
         let _ = (signal
         |> deliverOn(self.queue)).start(next: { [weak self] messages in
             if let strongSelf = self {
-                strongSelf.notificationMessagesPipe.putNext(messages)
+                strongSelf.notificationMessagesPipe.putNext(messages.notifications)
+                if !messages.incoming.isEmpty {
+                    strongSelf.incomingMessagesPipe.putNext(messages.incoming)
+                }
             }
         }, completed: {
             completed()

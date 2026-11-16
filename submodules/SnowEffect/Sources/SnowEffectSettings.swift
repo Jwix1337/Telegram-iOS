@@ -26,17 +26,41 @@ public struct SnowEffectSettings: Codable, Equatable {
         case large = 1.35
     }
 
+    public enum AccumulationSpeed: Double, Codable, CaseIterable {
+        case slow = 0.5
+        case normal = 1.0
+        case fast = 2.0
+    }
+
+    /// Upper bound in points; the drift grows above the composer, never over its controls.
+    public enum MaximumSnowHeight: Double, Codable, CaseIterable {
+        case small = 6.0
+        case medium = 10.0
+        case large = 16.0
+    }
+
     public var enabled: Bool = false
     public var seasonal: Bool = false
     public var intensity: Intensity = .medium
     public var speed: Speed = .normal
     public var size: Size = .normal
+    public var accumulationEnabled: Bool = true
+    public var accumulationSpeed: AccumulationSpeed = .normal
+    public var maximumSnowHeight: MaximumSnowHeight = .medium
+    public var shakeToClear: Bool = true
+    public var swipeToClear: Bool = true
+    public var winterSnowballsEnabled: Bool = true
+    public var winterReceiveSnowballs: Bool = true
+    public var winterSnowmanEnabled: Bool = true
+    public var winterAnimationsEnabled: Bool = true
 
     public init() {
     }
 
     private enum CodingKeys: String, CodingKey {
         case enabled, seasonal, intensity, speed, size
+        case accumulationEnabled, accumulationSpeed, maximumSnowHeight, shakeToClear, swipeToClear
+        case winterSnowballsEnabled, winterReceiveSnowballs, winterSnowmanEnabled, winterAnimationsEnabled
     }
 
     public init(from decoder: Decoder) throws {
@@ -46,6 +70,15 @@ public struct SnowEffectSettings: Codable, Equatable {
         self.intensity = try container.decodeIfPresent(Intensity.self, forKey: .intensity) ?? .medium
         self.speed = try container.decodeIfPresent(Speed.self, forKey: .speed) ?? .normal
         self.size = try container.decodeIfPresent(Size.self, forKey: .size) ?? .normal
+        self.accumulationEnabled = try container.decodeIfPresent(Bool.self, forKey: .accumulationEnabled) ?? true
+        self.accumulationSpeed = try container.decodeIfPresent(AccumulationSpeed.self, forKey: .accumulationSpeed) ?? .normal
+        self.maximumSnowHeight = try container.decodeIfPresent(MaximumSnowHeight.self, forKey: .maximumSnowHeight) ?? .medium
+        self.shakeToClear = try container.decodeIfPresent(Bool.self, forKey: .shakeToClear) ?? true
+        self.swipeToClear = try container.decodeIfPresent(Bool.self, forKey: .swipeToClear) ?? true
+        self.winterSnowballsEnabled = try container.decodeIfPresent(Bool.self, forKey: .winterSnowballsEnabled) ?? true
+        self.winterReceiveSnowballs = try container.decodeIfPresent(Bool.self, forKey: .winterReceiveSnowballs) ?? true
+        self.winterSnowmanEnabled = try container.decodeIfPresent(Bool.self, forKey: .winterSnowmanEnabled) ?? true
+        self.winterAnimationsEnabled = try container.decodeIfPresent(Bool.self, forKey: .winterAnimationsEnabled) ?? true
     }
 
     /// Gregorian months, in the user's time zone, regardless of their preferred calendar.

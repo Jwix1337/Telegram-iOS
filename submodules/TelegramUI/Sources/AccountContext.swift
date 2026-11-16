@@ -31,6 +31,7 @@ import WalletConnectScreen
 import AlertUI
 import MetalEngine
 import MessageWidget
+import SnowEffect
 
 private final class DeviceSpecificContactImportContext {
     let disposable = MetaDisposable()
@@ -189,6 +190,7 @@ public final class AccountContextImpl: AccountContext {
     private var managedAppSpecificContactsDisposable: Disposable?
     
     private var experimentalUISettingsDisposable: Disposable?
+    private var winterEventBridge: WinterEventAccountBridge?
     
     public let cachedGroupCallContexts: AccountGroupCallContextCache
     
@@ -626,6 +628,10 @@ public final class AccountContextImpl: AccountContext {
             (self.animationRenderer as? DCTMultiAnimationRendererImpl)?.useYuvA = settings.compressedEmojiCache
         })
 
+        if sharedContext.applicationBindings.isMainApp && !temp {
+            self.winterEventBridge = WinterEventAccountBridge(context: self)
+        }
+
         self.twoStepAuthData.set(
             .single(nil)
             |> then(
@@ -683,6 +689,7 @@ public final class AccountContextImpl: AccountContext {
     }
 
     deinit {
+        self.winterEventBridge?.stop()
         if self.walletContext != nil {
             self.account.walletTransferTasksRunning.set(.single(false))
         }
