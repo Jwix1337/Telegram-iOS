@@ -4,7 +4,9 @@ GitHub Actions run43887924548 (b5c4f57) реально дошёл до SwiftComp
 
 Добавлен build-system/SnowEffect/typecheck_snow_effect.py: настоящий swiftc -typecheck всех SnowEffect/Sources с iPhoneOS SDK/arm64/iOS15/warnings-as-errors, без Telegram/линковки/подписи. Включён в models_only и перед полной компиляцией в build-telegram-snow.yml. Это проверяет также UIKit-код, который прежние Foundation tests и grammar parse не покрывали. На Linux не исполняется; запускается на macOS CI.
 
-Локально прошли Python syntax, YAML/preflight wiring, grammar parse2изменённых Swift и diff whitespace. Apple typecheck/модельные тесты после исправления ещё ожидают CI. Следующее действие: опубликовать патч, запустить только models_only=true, прочитать ошибки/результаты; после успеха повторить IPA workflow из этой ветки на xcode-27 (не xlarge). Сервер/master/VPS/ресурсы и функциональная механика не менялись.
+Preflight run43895846938 остался в очереди macos-15 и отменён до исполнения. models_only теперь использует тот же выбранный runner и закреплённый DEVELOPER_DIR/Xcode27.1, что IPA; это исключает расхождение SDK между проверкой и production build. xlarge не выбран.
+
+Локально прошли Python syntax, YAML/preflight wiring, grammar parse2изменённых Swift и diff whitespace. macOS/Xcode27.1 CI run43896432500 (23ffd29) SUCCESS: настоящий swiftc -typecheck всего SnowEffect с iPhoneOS SDK прошёл; все38Foundation XCTest прошли без failures; дополнительный swift frontend parse прошёл. UI XCTest/запуск iPhone не выполнялись. Следующее действие: повторить IPA workflow из этой ветки на xcode-27 (не xlarge), получить реальный результат всей сборки. Это подтверждает SnowEffect и модели, но не компиляцию остальных модулей Telegram и не готовый IPA. Сервер/master/VPS/ресурсы и функциональная механика не менялись.
 
 ---
 
