@@ -1,10 +1,20 @@
+# Исправление Timer в TelegramUI, 2026-11-16
+
+Run43920418338 (99320ce) FAILURE: компиляция дошла до TelegramUI (9873/9962 Bazel actions), компилятор сообщил неоднозначный Timer в WinterChatInteractions.swift:20. Нативный лог показал Foundation.Timer и SwiftSignalKit.Timer как кандидаты. Retry использует Foundation timeInterval/repeats и RunLoop.main; явно квалифицированы тип свойства retry и создание Foundation.Timer. Интервал15секунд/порядок invalidation/транспорт не изменены.
+
+Проверено локально: оба Timer в этом зимнем файле квалифицированы, Swift grammar и diff whitespace PASS. Соседние ChatController timers уже SwiftSignalKit-qualified; их код не менялся. Полная TelegramUI компиляция после этого патча ещё не подтверждена. SnowEffect iOS SDK typecheck и38Foundation tests из предыдущего успешного preflight актуальны; отдельно не повторялись. Старый IPA не выдавать за новую сборку, нового IPA пока нет.
+
+Следующий шаг: коммит/обычный push патча, одна новая IPA сборка xcode-27/own/no-extensions, наблюдать результат и проверять только реальные новые diagnostics. Master/сервер/VPS/ресурсы не менять, xlarge не использовать.
+
+---
+
 # Исправление SettingsUI после наблюдения за IPA, 2026-11-16
 
 Run43896990604 (ca6b303) FAILURE: SettingsUI/SnowHatPublishing.swift:33 — extra context/missing alertContext. Первопричина: файл импортировал только AlertUI, а требуемый адаптер textAlertController(context:AccountContext,...) экспортируется PresentationDataUtils. Добавлен отсутствующий import в этот файл и аналогичный WinterChatInteractions.swift (его вызовы имеют ту же сигнатуру). Зависимость уже есть в обоих BUILD, новые зависимости/серверные изменения не добавлены.
 
 Проверено: сигнатура фактического адаптера и существующие SettingsUI call-sites/импорты; Swift grammar2файлов и git diff --check PASS. SettingsUI/TelegramUI typecheck целиком локально недоступен без Apple SDK и собранного графа зависимостей; полноценную компиляцию подтвердит только новый CI. 38успешных Foundation tests и успешный iOS SDK typecheck SnowEffect из run43896432500 остаются актуальны (их исходники не менялись); отдельный повтор этих тестов не запускался.
 
-Следующее действие: коммит/обычный push в codex/winter-validation, одна новая IPA сборка xcode-27/own/no-extensions и наблюдение до результата. Не выбирать xlarge, не менять master/VPS, не запускать параллельные IPA сборки. GitHub API может временно отвечать503; это не ошибка самой сборки. Live job-log download вернул Forbidden, completed --log-failed доступен; секретные redirect URLs в прогресс не копировать.
+Опубликован commit99320ce349f04a17027353fdab080bb0bf1e98d4; новая IPA сборка run43920418338 запущена (xcode-27/own/no-extensions), FAILURE: TelegramUI/WinterChatInteractions.swift:20 — неоднозначный Timer (Foundation.Timer/SwiftSignalKit.Timer). SettingsUI с предыдущим исправлением теперь скомпилировался. Следующее действие: gh run view 43920418338 --json status,conclusion,jobs, наблюдать до результата; при failure читать только --log-failed, при success проверить artifacts. Монитор пишет /tmp/telegram-snow-watch43920418338.log. Не выбирать xlarge, не менять master/VPS, не запускать параллельные IPA сборки. GitHub API может временно отвечать503; это не ошибка самой сборки. Live job-log download вернул Forbidden, completed --log-failed доступен; секретные redirect URLs в прогресс не копировать.
 
 ---
 

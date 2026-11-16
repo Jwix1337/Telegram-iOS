@@ -17,7 +17,7 @@ final class WinterEventAccountBridge {
     private var incoming: Disposable?
     private let outgoing = MetaDisposable()
     private var observers: [NSObjectProtocol] = []
-    private var retry: Timer?
+    private var retry: Foundation.Timer?
     private var sending = false
     private var stopped = false
 
@@ -91,7 +91,7 @@ final class WinterEventAccountBridge {
                 WinterEventTransport.shared.markEnqueued(eventID: event.eventID, accountID: accountID)
                 DispatchQueue.main.async { [weak self] in self?.pump() }
             } else {
-                let timer = Timer(timeInterval: 15.0, repeats: false) { [weak self] _ in self?.pump() }
+                let timer = Foundation.Timer(timeInterval: 15.0, repeats: false) { [weak self] _ in self?.pump() }
                 RunLoop.main.add(timer, forMode: .common)
                 self.retry = timer
             }
