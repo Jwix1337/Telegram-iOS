@@ -1,0 +1,160 @@
+{
+  "name": "Telegram Snow corrected transparent snowman presets",
+  "version": 2,
+  "coordinate_system": "Uniform square transparent PNG, snowman positioned consistently on 512x512 canvas. For each displayed mini 60pt image use the 1x/2x/3x preset. Crop to visual bbox only if you update attachment anchors for all assets.",
+  "notes": [
+    "Ten visual presets, not ten distinct hats: three hat styles, two scarf colors, two bare-head looks, two optional star looks.",
+    "Generated full sprites are presets, not independently interchangeable accessory layers. Preserve existing app hats and all scarf colors; compose and cache missing combinations using existing app assets.",
+    "Stage images are sequential visual snapshots only. For arbitrary shared state, render independent layers using the existing implementation.",
+    "No server changes, PNG transport or frame-by-frame redraw needed.",
+    "All delivered PNGs are RGBA with transparent background. 512px masters and 60/120/180px square exports. Keep aspect ratio.",
+    "Gold star is baked into festive presets: do not select those unless existing synchronized state can represent it; do not introduce local-only divergence."
+  ],
+  "stage_files": {
+    "01_snow_body": {
+      "file": "stages_512/01_snow_body.png",
+      "label_ru": "Пустой снеговик"
+    },
+    "02_eyes": {
+      "file": "stages_512/02_eyes.png",
+      "label_ru": "Глазки"
+    },
+    "03_coal_smile": {
+      "file": "stages_512/03_coal_smile.png",
+      "label_ru": "Улыбка"
+    },
+    "04_carrot_nose": {
+      "file": "stages_512/04_carrot_nose.png",
+      "label_ru": "Морковка"
+    },
+    "05_coal_buttons": {
+      "file": "stages_512/05_coal_buttons.png",
+      "label_ru": "Пуговицы"
+    },
+    "06_twig_arms": {
+      "file": "stages_512/06_twig_arms.png",
+      "label_ru": "Веточки"
+    }
+  },
+  "presets": {
+    "01_classic_red": {
+      "label_ru": "Красная шапка и красный шарф",
+      "layers": [
+        "scarf_red",
+        "hat_red"
+      ],
+      "full": "complete_512/01_classic_red.png",
+      "1x": "mini_60pt_1x/01_classic_red.png",
+      "2x": "mini_60pt_2x/01_classic_red.png",
+      "3x": "mini_60pt_3x/01_classic_red.png"
+    },
+    "02_winter_blue": {
+      "label_ru": "Синяя шапка и синий шарф",
+      "layers": [
+        "scarf_blue",
+        "hat_blue"
+      ],
+      "full": "complete_512/02_winter_blue.png",
+      "1x": "mini_60pt_1x/02_winter_blue.png",
+      "2x": "mini_60pt_2x/02_winter_blue.png",
+      "3x": "mini_60pt_3x/02_winter_blue.png"
+    },
+    "03_top_hat_red": {
+      "label_ru": "Цилиндр и красный шарф",
+      "layers": [
+        "scarf_red",
+        "hat_top_black"
+      ],
+      "full": "complete_512/03_top_hat_red.png",
+      "1x": "mini_60pt_1x/03_top_hat_red.png",
+      "2x": "mini_60pt_2x/03_top_hat_red.png",
+      "3x": "mini_60pt_3x/03_top_hat_red.png"
+    },
+    "04_top_hat_blue": {
+      "label_ru": "Цилиндр и синий шарф",
+      "layers": [
+        "scarf_blue",
+        "hat_top_black"
+      ],
+      "full": "complete_512/04_top_hat_blue.png",
+      "1x": "mini_60pt_1x/04_top_hat_blue.png",
+      "2x": "mini_60pt_2x/04_top_hat_blue.png",
+      "3x": "mini_60pt_3x/04_top_hat_blue.png"
+    },
+    "05_santa_blue_scarf": {
+      "label_ru": "Красная шапка и синий шарф",
+      "layers": [
+        "scarf_blue",
+        "hat_red"
+      ],
+      "full": "complete_512/05_santa_blue_scarf.png",
+      "1x": "mini_60pt_1x/05_santa_blue_scarf.png",
+      "2x": "mini_60pt_2x/05_santa_blue_scarf.png",
+      "3x": "mini_60pt_3x/05_santa_blue_scarf.png"
+    },
+    "06_blue_hat_red_scarf": {
+      "label_ru": "Синяя шапка и красный шарф",
+      "layers": [
+        "scarf_red",
+        "hat_blue"
+      ],
+      "full": "complete_512/06_blue_hat_red_scarf.png",
+      "1x": "mini_60pt_1x/06_blue_hat_red_scarf.png",
+      "2x": "mini_60pt_2x/06_blue_hat_red_scarf.png",
+      "3x": "mini_60pt_3x/06_blue_hat_red_scarf.png"
+    },
+    "07_red_scarf": {
+      "label_ru": "Без шапки, красный шарф",
+      "layers": [
+        "scarf_red"
+      ],
+      "full": "complete_512/07_red_scarf.png",
+      "1x": "mini_60pt_1x/07_red_scarf.png",
+      "2x": "mini_60pt_2x/07_red_scarf.png",
+      "3x": "mini_60pt_3x/07_red_scarf.png"
+    },
+    "08_blue_scarf": {
+      "label_ru": "Без шапки, синий шарф",
+      "layers": [
+        "scarf_blue"
+      ],
+      "full": "complete_512/08_blue_scarf.png",
+      "1x": "mini_60pt_1x/08_blue_scarf.png",
+      "2x": "mini_60pt_2x/08_blue_scarf.png",
+      "3x": "mini_60pt_3x/08_blue_scarf.png"
+    },
+    "09_festive_red": {
+      "label_ru": "Красный комплект со звездой",
+      "layers": [
+        "scarf_red",
+        "hat_red",
+        "star_gold"
+      ],
+      "full": "complete_512/09_festive_red.png",
+      "1x": "mini_60pt_1x/09_festive_red.png",
+      "2x": "mini_60pt_2x/09_festive_red.png",
+      "3x": "mini_60pt_3x/09_festive_red.png"
+    },
+    "10_festive_blue": {
+      "label_ru": "Синий комплект со звездой",
+      "layers": [
+        "scarf_blue",
+        "hat_blue",
+        "star_gold"
+      ],
+      "full": "complete_512/10_festive_blue.png",
+      "1x": "mini_60pt_1x/10_festive_blue.png",
+      "2x": "mini_60pt_2x/10_festive_blue.png",
+      "3x": "mini_60pt_3x/10_festive_blue.png"
+    }
+  },
+  "recommended_ui": {
+    "composer_snowman_height_pt": "48-72, default 60",
+    "tap_target_pt": 44,
+    "respect_safe_area": true,
+    "avoid_text_input_overlay": true,
+    "avoid_frame_timers": true,
+    "cache_by_pair_id_and_state_version": true,
+    "keep_original_accessories": "TelegramSnow_Snowman_PNG_Assets.zip"
+  }
+}

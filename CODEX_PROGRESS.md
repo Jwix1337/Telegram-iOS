@@ -1,3 +1,33 @@
+# Этап 1: исправленные ресурсы снеговика — 2026-11-16
+
+Ветка codex/winter-validation, один агент. Исходное рабочее дерево чистое. Прочитаны AGENTS.md/CLAUDE.md, предыдущий прогресс и manifest v2/README_RU.md из TelegramSnow_Ready_Snowmen_Fixed.zip. Сервер, аватарки, механика снега и протоколы не менялись.
+
+Аудит: SnowAccumulationView/Model, SnowEffectView и WinterSnowballView существуют с CA-анимацией/ограниченными бюджетами/таймерами и runtime gates; WinterEventTransport/WinterSyncService реализованы в прежних этапах. Это наличие кода, не подтверждение работы на iPhone. WinterSnowmanViewController ранее рисовал только векторные слои и брал текстуры шапок из SnowHatAssets; готовых Snowman PNG в tracked ресурсах не было. Изменений в этих компонентах, кроме рендера снеговика, в этом этапе нет.
+
+Подключены 8 НЕпраздничных образов: 32 исходных PNG без изменения байтов, 16 imagesets (мини60pt 1x/2x/3x + master512). Ресурсы включаются существующим glob TelegramUIAssets и существующей зависимостью приложения; BUILD не менялся. PREVIEW/stages не бандлятся; оригинальные manifest/README сохранены как документация происхождения. Старые ресурсы не удалялись.
+
+SnowmanHatStyle: отдельные замороженные IDs1..10; avatar SnowHatConfiguration и её настройки не менялись. Графические текстуры переиспользуются через явную таблицу, не через состояние аватарки. Все 10 шапок и 6 цветов шарфа сохранены. Простой синий колпак из архива НЕ равен существующему стилю6 с гирляндой, цилиндр НЕ равен10 с неоном: эти PNG включены как невыбираемые сейчас ресурсы, IDs не подменялись.
+
+Точный selector использует только Santa1+красный0/синий1 и без шапки+красный0/синий1 после наличия всех предыдущих7 деталей. Для остальных сочетаний/неполной сборки — прежние независимые CALayer-слои. Готовый PNG заменяет все слои фигуры сразу, второй шарф/шапка не накладываются. Если изображения нет — fallback на слои. Сохранены кеш текстур и reuse слоёв; добавлен ограниченный NSCache готовых PNG. Пропорции fit-square, прозрачные поля не обрезаются, 512 используется для крупного preview/export. Звёзды09/10 не включены: общее состояние не представляет звезду. stages_512 не используются как независимые слои или произвольное состояние.
+
+Проверки: все46 PNG архива (без PREVIEW) RGBA, квадратные заявленных размеров, прозрачный фон и alpha-bbox строго внутри холста. 32 импортированных PNG побайтно совпадают с архивом. В manifest нормализованы только окончания строк CRLF→LF, JSON-значения совпадают с архивом. git diff --cached --check после нормализации чистый. Постоянный check_snowman_assets.py проверил32 PNG/16imagesets/4точныхpreset/10textureMappings, пути и metadata. Swift grammar parse4 файлов прошёл, это НЕ compilation. Добавлены3 XCTest для 60 комбинаций, неполных стадий и исключения неверных/праздничных подстановок; они НЕ запускались — нет Swift/Xcode/iOS SDK. Runner моделей дополнен для macOS. Серверные тесты не повторялись, сервер не затронут.
+
+Ограничения: UIKit/actool/запись анимации по кадрам и производительность на iPhone не проверены; AGENTS.md требует такую проверку перед визуальным подтверждением. Разные готовые PNG немного отличаются пропорциями/деталями; не считать их геометрически совместимыми слоями. Остальные цвета/типы шапок остаются векторными. Текущий этап не добавляет новые типы шапок/звезду/новую механику.
+
+Изменения: WinterSnowmanAppearance.swift, WinterSnowmanResources.swift, WinterSnowmanViewController.swift, WinterSnowmanAppearanceTests.swift; SnowEffect/Resources/SnowmenV2/{manifest.json,README_RU.md}; TelegramUI/Images.xcassets/SnowmanReady_*; build-system/SnowEffect/{check_snowman_assets.py,test_winter_models.py}; CODEX_PROGRESS.md.
+
+Целевые команды:
+```
+cd /workspace/TelegramSnow
+python3 build-system/SnowEffect/check_snowman_assets.py  # developer dependency: Pillow
+# Только при наличии native Swift/macOS:
+python3 build-system/SnowEffect/test_winter_models.py
+```
+
+После локальных проверок сохранить отдельным коммитом и обычным push в эту ветку; master не менять, VPS не подключать, IPA не собирать. Завершить только этап1.
+
+---
+
 # Публикация Winter Sync — 2026-11-16
 
 Ветка codex/winter-validation. Перед публикацией рабочее дерево чистое; удалённая ветка отставала на три локальных коммита: e848e51 (backend), 7bd12bf (iOS transport), 4b3d9a5 (стабилизация/инструкция). Изменения кода не переписывались и история не заменялась.

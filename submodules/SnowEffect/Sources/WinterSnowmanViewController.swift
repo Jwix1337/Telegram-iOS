@@ -136,7 +136,7 @@ public final class WinterSnowmanViewController: UIViewController {
             button.layer.cornerRadius = 12.0
             button.layer.borderWidth = 2.0
             button.widthAnchor.constraint(equalToConstant: 76.0).isActive = true
-            button.setImage(SnowHatAssets.image(for: id), for: .normal)
+            button.setImage(WinterSnowmanHatStyle(rawValue: id).flatMap(WinterSnowmanResources.hat), for: .normal)
             button.imageView?.contentMode = .scaleAspectFit
             button.accessibilityLabel = self.text("Шапка", "Hat") + " \(id)"
             button.addTarget(self, action: #selector(self.chooseHat(_:)), for: .touchUpInside)
@@ -260,6 +260,8 @@ private final class WinterSnowmanCanvas: UIView {
     static let scarfColors: [UIColor] = [.systemRed, .systemBlue, .systemGreen, .systemPurple, .systemOrange, .systemPink]
     private let artwork = CALayer()
     private let ground = CAShapeLayer()
+    private let readyLayer = CALayer()
+    private var readyPreset: WinterSnowmanReadyPreset?
     private var parts: [SnowmanPart: CALayer] = [:]
     private var visibleParts = Set<SnowmanPart>()
 
@@ -301,9 +303,21 @@ private final class WinterSnowmanCanvas: UIView {
                 self.artwork.addSublayer(layer)
             }
         }
+        self.readyLayer.frame = CGRect(x: 0, y: 0, width: 1024, height: 1024)
+        self.readyLayer.contentsGravity = .resizeAspect
+        self.readyLayer.isHidden = true
+        self.artwork.addSublayer(self.readyLayer)
     }
 
     required init?(coder: NSCoder) { preconditionFailure("init(coder:) has not been implemented") }
+
+    private func applyReadyImage() -> Bool {
+        guard let preset = self.readyPreset else { self.readyLayer.contents = nil; return false }
+        let full = max(self.bounds.width, self.bounds.height) * max(1.0, self.traitCollection.displayScale) > 180.0
+        let image = WinterSnowmanResources.ready(preset, full: full, traits: self.traitCollection)
+        self.readyLayer.contents = image?.cgImage
+        return image != nil
+    }
 
     override func layoutSubviews() {
         super.layoutSubviews()
@@ -311,8 +325,12 @@ private final class WinterSnowmanCanvas: UIView {
         CATransaction.setDisableActions(true)
         self.artwork.bounds = CGRect(x: 0, y: 0, width: 1024, height: 1024)
         self.artwork.anchorPoint = .zero
-        self.artwork.position = .zero
-        self.artwork.setAffineTransform(CGAffineTransform(scaleX: self.bounds.width / 1024.0, y: self.bounds.height / 1024.0))
+        let scale = min(self.bounds.width, self.bounds.height) / 1024.0
+        self.artwork.position = CGPoint(x: (self.bounds.width - 1024.0 * scale) * 0.5, y: (self.bounds.height - 1024.0 * scale) * 0.5)
+        self.artwork.setAffineTransform(CGAffineTransform(scaleX: scale, y: scale))
+        let usesReady = self.applyReadyImage()
+        self.readyLayer.isHidden = !usesReady
+        for (part, layer) in self.parts { layer.isHidden = usesReady || !self.visibleParts.contains(part) }
         CATransaction.commit()
     }
 
@@ -330,10 +348,13 @@ private final class WinterSnowmanCanvas: UIView {
         CATransaction.setDisableActions(true)
         let colorIndex = min(Self.scarfColors.count - 1, max(0, session.value(.scarfColor) ?? 0))
         (self.parts[.scarf] as? CAShapeLayer)?.fillColor = Self.scarfColors[colorIndex].cgColor
-        self.parts[.hat]?.contents = SnowHatAssets.image(for: min(10, max(1, session.value(.hatStyle) ?? 1)))?.cgImage
+        self.parts[.hat]?.contents = WinterSnowmanHatStyle(rawValue: session.value(.hatStyle) ?? 1).flatMap(WinterSnowmanResources.hat)?.cgImage
+        self.readyPreset = WinterSnowmanReadyPreset.matching(session)
+        let usesReady = self.applyReadyImage()
+        self.readyLayer.isHidden = !usesReady
         for (part, layer) in self.parts {
-            layer.isHidden = !visible.contains(part)
-            if animate && visible.contains(part) && !self.visibleParts.contains(part) {
+            layer.isHidden = usesReady || !visible.contains(part)
+            if !usesReady && animate && visible.contains(part) && !self.visibleParts.contains(part) {
                 let opacity = CABasicAnimation(keyPath: "opacity")
                 opacity.fromValue = 0.0
                 opacity.toValue = 1.0
@@ -345,7 +366,7 @@ private final class WinterSnowmanCanvas: UIView {
                 placement.timingFunction = CAMediaTimingFunction(name: .easeOut)
                 layer.add(opacity, forKey: "installation.opacity")
                 layer.add(placement, forKey: "installation.position")
-            } else if !animate {
+            } else if !animate || usesReady {
                 layer.removeAllAnimations()
             }
         }
