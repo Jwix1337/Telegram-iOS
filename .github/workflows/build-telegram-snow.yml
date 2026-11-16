@@ -47,8 +47,10 @@ concurrency:
 jobs:
   winter-models:
     if: ${{ inputs.models_only }}
-    runs-on: macos-15
+    runs-on: ${{ inputs.runner || 'xcode-27' }}
     timeout-minutes: 10
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
