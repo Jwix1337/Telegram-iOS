@@ -14,6 +14,10 @@ on:
       - '.gitmodules'
   workflow_dispatch:
     inputs:
+      models_only:
+        description: Run isolated Winter model tests without compiling Telegram or producing IPA
+        type: boolean
+        default: false
       api_mode:
         description: Auto uses own secrets when present; otherwise official upstream sample FOR TESTING ONLY
         type: choice
@@ -41,7 +45,18 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  winter-models:
+    if: ${{ inputs.models_only }}
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - run: python3 build-system/SnowEffect/test_winter_models.py
+      - run: swiftc -frontend -parse submodules/SnowEffect/Sources/*.swift submodules/TelegramUI/Sources/WinterChatInteractions.swift
   device:
+    if: ${{ !inputs.models_only }}
     runs-on: ${{ inputs.runner || 'xcode-27' }}
     timeout-minutes: 360
     env:
