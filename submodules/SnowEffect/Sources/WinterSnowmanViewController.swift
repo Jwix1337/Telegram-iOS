@@ -11,7 +11,7 @@ public final class WinterSnowmanViewController: UIViewController {
     private let onComplete: () -> Void
     private let onExport: (UIImage) -> Void
     private let russian = Locale.preferredLanguages.first?.lowercased().hasPrefix("ru") == true
-    private let canvas = WinterSnowmanCanvas()
+    private let canvas = WinterSnowmanCanvas(frame: .zero)
     private let status = UILabel()
     private let addButton = UIButton(type: .system)
     private let completeButton = UIButton(type: .system)

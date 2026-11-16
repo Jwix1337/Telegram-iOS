@@ -1,3 +1,13 @@
+# Исправление первой сборки новой ветки, 2026-11-16
+
+GitHub Actions run43887924548 (b5c4f57) реально дошёл до SwiftCompile и завершился failure. Два подтверждённых compiler errors в SnowEffect: SnowAccumulationView.gestureRecognizerShouldBegin требует override (метод UIView); WinterSnowmanCanvas(frame:transparent:) вызван без frame. Исправлены минимально: public override func и frame:.zero.
+
+Добавлен build-system/SnowEffect/typecheck_snow_effect.py: настоящий swiftc -typecheck всех SnowEffect/Sources с iPhoneOS SDK/arm64/iOS15/warnings-as-errors, без Telegram/линковки/подписи. Включён в models_only и перед полной компиляцией в build-telegram-snow.yml. Это проверяет также UIKit-код, который прежние Foundation tests и grammar parse не покрывали. На Linux не исполняется; запускается на macOS CI.
+
+Локально прошли Python syntax, YAML/preflight wiring, grammar parse2изменённых Swift и diff whitespace. Apple typecheck/модельные тесты после исправления ещё ожидают CI. Следующее действие: опубликовать патч, запустить только models_only=true, прочитать ошибки/результаты; после успеха повторить IPA workflow из этой ветки на xcode-27 (не xlarge). Сервер/master/VPS/ресурсы и функциональная механика не менялись.
+
+---
+
 # Этап5 — три поверхности аватарок и посадка шапок, 2026-11-16
 
 Один агент, исходное дерево чистое, ветка codex/winter-validation. VPS/сервер/API/master не менялись; IPA и тяжёлые сборки не запускались.

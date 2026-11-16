@@ -232,7 +232,7 @@ public final class SnowAccumulationView: UIView, UIGestureRecognizerDelegate {
         return path.contains(point) || (onMold != nil && point.y >= bounds.height - 4 && point.y < bounds.height)
     }
 
-    public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+    public override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         if gestureRecognizer === mold {
             let point = gestureRecognizer.location(in: self)
             return onMold != nil && point.x >= 12 && point.x <= bounds.width - 12

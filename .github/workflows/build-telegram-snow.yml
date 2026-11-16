@@ -53,6 +53,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+      - name: Typecheck the complete SnowEffect module against the iOS SDK
+        run: python3 build-system/SnowEffect/typecheck_snow_effect.py
       - run: python3 build-system/SnowEffect/test_winter_models.py
       - run: swiftc -frontend -parse submodules/SnowEffect/Sources/*.swift submodules/TelegramUI/Sources/WinterChatInteractions.swift
   device:
@@ -110,6 +112,9 @@ jobs:
           sudo xcode-select --switch "$DEVELOPER_DIR"
           python3 build-system/SnowEffect/sidestore_build.py configure
           df -h .
+
+      - name: Typecheck SnowEffect before the full application build
+        run: python3 build-system/SnowEffect/typecheck_snow_effect.py
 
       - name: Compile the real iPhone application
         shell: bash
