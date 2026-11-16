@@ -3,6 +3,8 @@ import Foundation
 /// Small, resolution-independent bank. Layout and preference changes preserve deposited snow.
 struct SnowAccumulationModel {
     private(set) var coverage: Double = 0.0
+    static let ballCost = 0.20
+    private var reservation: UUID?
     private(set) var profile: [Double]
 
     init(profile: [Double]? = nil) {
@@ -18,7 +20,7 @@ struct SnowAccumulationModel {
         }
     }
 
-    var isFull: Bool { self.coverage >= 1.0 }
+    var isFull: Bool { self.coverage >= (reservation == nil ? 1.0 : 1.0 - Self.ballCost) }
 
     mutating func advance(seconds: Double, settings: SnowEffectSettings, energyFactor: Double) {
         guard seconds.isFinite, seconds > 0.0, energyFactor > 0.0 else { return }
@@ -28,11 +30,23 @@ struct SnowAccumulationModel {
         case .medium: rate = 0.020
         case .heavy: rate = 0.030
         }
-        self.coverage = min(1.0, self.coverage + seconds * rate * settings.accumulationSpeed.rawValue * settings.speed.rawValue * energyFactor)
+        self.coverage = min(reservation == nil ? 1.0 : 1.0 - Self.ballCost, self.coverage + seconds * rate * settings.accumulationSpeed.rawValue * settings.speed.rawValue * energyFactor)
     }
 
     func heights(maximum: Double) -> [Double] {
         return self.profile.map { min(maximum, max(0.0, $0 * self.coverage * maximum)) }
+    }
+
+    mutating func reserveBall() -> UUID? {
+        guard reservation == nil, coverage >= Self.ballCost else { return nil }
+        let id = UUID(); reservation = id; coverage -= Self.ballCost
+        return id
+    }
+    @discardableResult mutating func finishBall(_ id: UUID, commit: Bool) -> Bool {
+        guard reservation == id else { return false }
+        reservation = nil
+        if !commit { coverage = min(1.0, coverage + Self.ballCost) }
+        return true
     }
 
     mutating func clear() {

@@ -1108,6 +1108,10 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         self.updateSnowAccumulationAnchor()
     }
 
+    func setSnowMoldHandler(_ handler: ((SnowMoldTicket) -> Void)?) {
+        snowAccumulationView.onMold = handler
+    }
+
     func clearSnowFromShake() {
         self.snowAccumulationView.clearFromShake()
     }

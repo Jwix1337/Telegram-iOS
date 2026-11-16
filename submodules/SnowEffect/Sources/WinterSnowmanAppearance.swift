@@ -11,14 +11,12 @@ enum WinterSnowmanHatStyle: Int, CaseIterable {
 enum WinterSnowmanReadyPreset: String, CaseIterable {
     case classicRed = "01_classic_red"
     case santaBlueScarf = "05_santa_blue_scarf"
-    case redScarf = "07_red_scarf"
-    case blueScarf = "08_blue_scarf"
 
     static func matching(_ session: WinterSnowmanSession) -> WinterSnowmanReadyPreset? {
+        guard session.completed, session.isBuilt else { return nil }
         guard SnowmanPart.assembly.dropLast().allSatisfy({ session.contains($0) }) else { return nil }
         let color = session.value(.scarfColor) ?? 0
         guard color == 0 || color == 1 else { return nil }
-        if !session.contains(.hat) { return color == 0 ? .redScarf : .blueScarf }
         guard WinterSnowmanHatStyle(rawValue: session.value(.hatStyle) ?? 1) == .santa else { return nil }
         return color == 0 ? .classicRed : .santaBlueScarf
     }

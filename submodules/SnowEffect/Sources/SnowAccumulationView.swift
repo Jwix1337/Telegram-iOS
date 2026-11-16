@@ -4,6 +4,14 @@ import UIKit
 
 /// One shape above the real composer background; only the visible snow accepts touches.
 /// Growth uses a low-frequency timer, while all interpolation and debris run in Core Animation.
+public final class SnowMoldTicket {
+    public private(set) var pending = true
+    private let finish: (Bool) -> Void
+    init(finish: @escaping (Bool) -> Void) { self.finish = finish }
+    public func resolve(commit: Bool) { guard pending else { return }; pending = false; finish(commit) }
+    deinit { if pending { finish(false) } }
+}
+
 public final class SnowAccumulationView: UIView, UIGestureRecognizerDelegate {
     public var isEffectVisible: Bool = false {
         didSet { if oldValue != self.isEffectVisible { self.refresh() } }
@@ -21,6 +29,10 @@ public final class SnowAccumulationView: UIView, UIGestureRecognizerDelegate {
     private var cleanupWork: DispatchWorkItem?
     private var drawnSize: CGSize = .zero
     private var drawnMaximum: Double = 0.0
+    public var onMold: ((SnowMoldTicket) -> Void)? { didSet { mold.isEnabled = onMold != nil && running } }
+    private var moldStart = CGPoint.zero
+    private let hint = UILabel()
+    private lazy var mold = UILongPressGestureRecognizer(target: self, action: #selector(self.molded(_:)))
     private lazy var swipe = UIPanGestureRecognizer(target: self, action: #selector(self.swiped(_:)))
 
     public override init(frame: CGRect) {
@@ -41,6 +53,14 @@ public final class SnowAccumulationView: UIView, UIGestureRecognizerDelegate {
         self.swipe.maximumNumberOfTouches = 1
         self.swipe.cancelsTouchesInView = false
         self.addGestureRecognizer(self.swipe)
+        mold.minimumPressDuration = 0.45; mold.allowableMovement = 12; mold.delegate = self
+        mold.cancelsTouchesInView = false
+        addGestureRecognizer(mold)
+        swipe.require(toFail: mold)
+        hint.font = .systemFont(ofSize: 12); hint.textColor = .white
+        hint.backgroundColor = UIColor.black.withAlphaComponent(0.7); hint.textAlignment = .center
+        hint.layer.cornerRadius = 8; hint.clipsToBounds = true; hint.isHidden = true
+        hint.isUserInteractionEnabled = false; addSubview(hint)
 
         let center = NotificationCenter.default
         for name in [SnowEffectPreferences.didChange, UIAccessibility.reduceMotionStatusDidChangeNotification,
@@ -97,6 +117,7 @@ public final class SnowAccumulationView: UIView, UIGestureRecognizerDelegate {
             && self.bounds.width > 0.0 && self.bounds.height > 0.0
         self.bank.isHidden = !self.running
         self.swipe.isEnabled = self.running && settings.swipeToClear
+        self.mold.isEnabled = self.running && self.onMold != nil
         if !self.running {
             self.growthTimer?.invalidate()
             self.growthTimer = nil
@@ -196,8 +217,8 @@ public final class SnowAccumulationView: UIView, UIGestureRecognizerDelegate {
     }
 
     public override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        guard self.running, SnowEffectPreferences.shared.settings.swipeToClear,
-              self.model.coverage > 0.04, self.bounds.contains(point),
+        guard self.running, (SnowEffectPreferences.shared.settings.swipeToClear || onMold != nil),
+              self.bounds.contains(point),
               let path = self.bank.presentation()?.path ?? self.bank.path else { return false }
         // The chat forwards hits outside the composer's bounds. Respect hidden/fading
         // ancestors even on that direct path, so dismissed panels cannot capture a swipe.
@@ -208,10 +229,14 @@ public final class SnowAccumulationView: UIView, UIGestureRecognizerDelegate {
             }
             ancestor = view.superview
         }
-        return path.contains(point)
+        return path.contains(point) || (onMold != nil && point.y >= bounds.height - 4 && point.y < bounds.height)
     }
 
     public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        if gestureRecognizer === mold {
+            let point = gestureRecognizer.location(in: self)
+            return onMold != nil && point.x >= 12 && point.x <= bounds.width - 12
+        }
         guard gestureRecognizer === self.swipe else { return true }
         // UIKit already hit-tested the touch on the bank. At recognition the finger
         // may have travelled outside this narrow shape; that must still clear it.
@@ -219,7 +244,31 @@ public final class SnowAccumulationView: UIView, UIGestureRecognizerDelegate {
     }
 
     public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-        return true
+        return gestureRecognizer !== mold && otherGestureRecognizer !== mold
+    }
+
+    @objc private func molded(_ gesture: UILongPressGestureRecognizer) {
+        switch gesture.state {
+        case .began: moldStart = gesture.location(in: self)
+        case .ended:
+            let end = gesture.location(in: self)
+            guard hypot(end.x - moldStart.x, end.y - moldStart.y) >= 12 else { return }
+            guard let id = model.reserveBall() else {
+                hint.text = "Ещё немного снега…"
+                hint.frame = CGRect(x: max(0, bounds.midX - 90), y: -30, width: 180, height: 26)
+                hint.isHidden = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) { [weak self] in self?.hint.isHidden = true }
+                return
+            }
+            draw(animated: false)
+            let ticket = SnowMoldTicket { [weak self] commit in
+                guard let self else { return }
+                self.model.finishBall(id, commit: commit)
+                self.draw(animated: false); self.refresh()
+            }
+            onMold?(ticket)
+        default: break // recognizer cancellation never reserves any snow
+        }
     }
 
     @objc private func swiped(_ gesture: UIPanGestureRecognizer) {

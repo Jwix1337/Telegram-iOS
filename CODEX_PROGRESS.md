@@ -1,3 +1,33 @@
+# Этап 2 — лепка и зимняя коробка, 2026-11-16
+
+Ветка codex/winter-validation, один агент. Исходное дерево чистое. VPS/сервер/протокол v1 не менялись, к endpoint не подключались, IPA не собиралась. Текущий HTTPS endpoint добавлен только как начальное значение setup: https://winter.ogirin-media-assets-pack.space:9443; без device key нет автоматических запросов.
+
+Реализовано: long-press0.45с непосредственно на сугробе, затем движение>=12pt. До окончания жеста снег не списывается; отменённый/короткий жест ничего не расходует. Формирование резервирует20% нормализованной ёмкости сугроба (одинаковый снежок). Один UUID резерва, commit/cancel идемпотентны. Отмена меню/подтверждения, неудача постановки события и освобождение ticket возвращают резерв. Пока резерв удерживается, рост учитывает его в максимальной ёмкости. Недостаток снега показывает краткую подсказку. Swipe/Shake очистки сохранены; long-press вне области сугроба не добавлялся, край жеста защищён12pt.
+
+Меню сформированного снежка предлагает бросок или добавление следующего body-part bottom/middle/head через существующий WinterEventTransport/WinterSync. Требуется принятое общее приглашение; иначе резерв возвращается и показана инструкция приглашения. Бесплатные обходы расхода через прежние кнопки броска/добавления body выключены. Списание фиксируется при подтверждённой постановке локального действия в очередь; это НЕ утверждение о серверном ACK. После сетевого409 действуют прежние refresh/explicit retry, не автоматическое повторное списание одного ticket.
+
+После головы показывается бесплатная коробка, доступная обоим: отдельные кнопки украшений,10 шапок и6 цветов; улыбка/пуговицы выводятся автоматически при наличии головы, одинаково у обоих. Детали привязаны к исходным координатам векторного рендера, ветки позади корпуса. В процессе нет целого PNG; готовые PNG только при completed && isBuilt и точном Santa1+цвет0/1. Остальные сочетания послойные; ресурсы bare-head сохранены, но не выдаются за завершённый v1 снеговик.
+
+Ограничение API: действующий сервер требует eyes→nose→arms→scarf→hat, поэтому свободный порядок/произвольные drag-позиции невозможно честно синхронизировать v1. Реализован разрешённый пользователем вариант добавления нажатием, с поэтапно доступными кнопками и пояснением. Цвет/тип выбираются существующими scarfColor/hatStyle. Новые события/поля/PNG transport не вводились; сервер не менялся. Если нужен произвольный порядок/drag-placement, это отдельная согласованная эволюция API, не локальная имитация.
+
+Проверки: новый серверный ASGI-тест трёх шаров, запрета head-before-bottom, повтора ID и stale simultaneous eyes прошёл. Это имитируемые клиенты на временной SQLite, не действующий endpoint и не iPhone. Добавлен Foundation XCTest резерва/недостатка/отмены/повторногоcommit, обновлены проверки незавершённых PNG и runner. Swift/XCTest НЕ запускались: нет Apple SDK/Swift. Grammar parse изменённых Swift и diff whitespace проверены. Ресурсный check подтверждает32RGBA/16imagesets/2completedpresets/10texture mappings.
+
+Изменено: SnowAccumulationModel/View, ChatControllerNode/ChatController/WinterChatInteractions; WinterSnowmanViewController/Appearance; WinterSyncSetupViewController (только endpoint); SnowAccumulationTests/WinterSnowmanAppearanceTests; runner/check_snowman_assets.py; winter-sync/test_integration.py (только тест); этот прогресс.
+
+Нужны два устройства/Apple SDK: реальная компиляция, gesture arbitration с прокруткой/клавиатурой/edge navigation, визуальная посадка/анимация и все сетевые сценарии live. По AGENTS.md запись/оценка кадров не выполнена без macOS. Не заявлять о подтверждённой UI-плавности или реальном обмене.
+
+Целевые команды:
+```
+PYTHONPATH=winter-sync python3 -m unittest test_integration.IntegrationTests.test_three_balls_then_ordered_decoration_without_protocol_extensions -q
+python3 build-system/SnowEffect/check_snowman_assets.py
+# macOS/native Swift only:
+python3 build-system/SnowEffect/test_winter_models.py
+```
+
+Сохранить отдельным коммитом и обычным push в эту ветку; завершить только этап2.
+
+---
+
 # Этап 1: исправленные ресурсы снеговика — 2026-11-16
 
 Ветка codex/winter-validation, один агент. Исходное рабочее дерево чистое. Прочитаны AGENTS.md/CLAUDE.md, предыдущий прогресс и manifest v2/README_RU.md из TelegramSnow_Ready_Snowmen_Fixed.zip. Сервер, аватарки, механика снега и протоколы не менялись.

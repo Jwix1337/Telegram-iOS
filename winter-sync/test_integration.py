@@ -61,6 +61,24 @@ class IntegrationTests(unittest.TestCase):
         disabled = self.b.get(f'/v1/pairs/{h.pid}/state', headers=h.headers(h.b)).json()
         self.assertFalse(disabled['hats'][h.devices[0]['device_id']]['enabled'])
 
+    def test_three_balls_then_ordered_decoration_without_protocol_extensions(self):
+        h = self.h; sid = str(uuid4())
+        def event(kind, version, **kw):
+            return h.event(kind, session_id=sid, expected_version=version, **kw)
+        self.assertEqual(self.send(self.a, h.a, event('snowman_invite', 0)).status_code, 200)
+        self.assertEqual(self.send(self.b, h.b, event('snowman_accept', 1)).status_code, 200)
+        self.assertEqual(self.send(self.a, h.a, event('snowman_update', 2, mutation={'part': 'head', 'value': 1})).status_code, 409)
+        for version, part in enumerate(['bottom', 'middle', 'head'], 2):
+            client, token = (self.a, h.a) if version % 2 == 0 else (self.b, h.b)
+            self.assertEqual(self.send(client, token, event('snowman_update', version, mutation={'part': part, 'value': 1})).status_code, 200)
+        state = self.b.get(f'/v1/pairs/{h.pid}/state', headers=h.headers(h.b)).json()['sessions'][0]
+        self.assertEqual(set(state['parts']), {'bottom', 'middle', 'head'})
+        first = event('snowman_update', 5, mutation={'part': 'eyes', 'value': 1})
+        stale = event('snowman_update', 5, mutation={'part': 'eyes', 'value': 1})
+        self.assertEqual(self.send(self.a, h.a, first).status_code, 200)
+        self.assertEqual(self.send(self.a, h.a, first).status_code, 200)
+        self.assertEqual(self.send(self.b, h.b, stale).status_code, 409)
+
     def test_storage_outage_does_not_acknowledge_or_duplicate_event(self):
         h = self.h
         event = h.event()

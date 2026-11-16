@@ -6,7 +6,7 @@ final class WinterSnowmanAppearanceTests: XCTestCase {
         var parts = Dictionary(uniqueKeysWithValues: SnowmanPart.assembly.prefix(count).map { ($0, 1) })
         parts[.hatStyle] = hat; parts[.scarfColor] = color
         return .serverSnapshot(id: "11111111-1111-4111-8111-111111111111", inviter: 1, invitee: 2,
-            createdAt: 1800000000000, accepted: true, completed: false, parts: parts, version: 10)
+            createdAt: 1800000000000, accepted: true, completed: count == 8, parts: parts, version: 10)
     }
     func testAllTenHatIDsAndAllSixScarfColorsRemainRepresentable() {
         XCTAssertEqual(WinterSnowmanHatStyle.allCases.map(\.rawValue), Array(1 ... 10))
@@ -22,9 +22,9 @@ final class WinterSnowmanAppearanceTests: XCTestCase {
             }
         }
     }
-    func testBareHeadRequiresEveryPreviousAssemblyPartAndExactScarf() {
+    func testNoWholePNGForUnfinishedSnowman() {
         for color in 0 ... 5 {
-            XCTAssertEqual(WinterSnowmanReadyPreset.matching(session(hat: 8, color: color, count: 7)), color == 0 ? .redScarf : color == 1 ? .blueScarf : nil)
+            XCTAssertNil(WinterSnowmanReadyPreset.matching(session(hat: 8, color: color, count: 7)))
         }
         for count in 0 ... 6 {
             XCTAssertNil(WinterSnowmanReadyPreset.matching(session(hat: 1, color: 0, count: count)))
@@ -33,7 +33,7 @@ final class WinterSnowmanAppearanceTests: XCTestCase {
     func testNoBlueLightsOrNeonToTopHatSubstitutionAndNoFestivePresets() {
         XCTAssertNil(WinterSnowmanReadyPreset.matching(session(hat: 6, color: 1)))
         XCTAssertNil(WinterSnowmanReadyPreset.matching(session(hat: 10, color: 0)))
-        XCTAssertEqual(WinterSnowmanReadyPreset.allCases.count, 4)
+        XCTAssertEqual(WinterSnowmanReadyPreset.allCases.count, 2)
         XCTAssertFalse(WinterSnowmanReadyPreset.allCases.contains { $0.rawValue.contains("festive") })
     }
 }

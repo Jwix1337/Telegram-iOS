@@ -17,6 +17,8 @@ public final class WinterSnowmanViewController: UIViewController {
     private let completeButton = UIButton(type: .system)
     private let exportButton = UIButton(type: .system)
     private var colorButtons: [UIButton] = []
+    private var boxViews: [UIView] = []
+    private var detailButtons: [UIButton] = []
     private var hatButtons: [UIButton] = []
     private let stages: [SnowmanPart] = [.bottom, .middle, .head, .eyes, .nose, .arms, .scarf, .hat]
 
@@ -94,7 +96,18 @@ public final class WinterSnowmanViewController: UIViewController {
         self.style(self.addButton)
         self.addButton.addTarget(self, action: #selector(self.addPart), for: .touchUpInside)
         content.addArrangedSubview(self.addButton)
-        content.addArrangedSubview(self.label(self.text("Цвет шарфа", "Scarf Color"), style: .headline))
+        let boxTitle = self.label("Бесплатная Зимняя коробка", style: .headline)
+        let boxNote = self.label("Улыбка и пуговицы появляются вместе с головой. API v1 добавляет детали по порядку: глаза, морковка, веточки, шарф, шапка.", style: .footnote)
+        content.addArrangedSubview(boxTitle); content.addArrangedSubview(boxNote)
+        boxViews += [boxTitle, boxNote]
+        for (index, title) in ["Глаза", "Морковка", "Две веточки", "Шарф", "Шапка"].enumerated() {
+            let button = UIButton(type: .system); self.style(button)
+            button.tag = index; button.setTitle(title, for: .normal)
+            button.addTarget(self, action: #selector(self.addDecoration(_:)), for: .touchUpInside)
+            detailButtons.append(button); boxViews.append(button); content.addArrangedSubview(button)
+        }
+        let colorTitle = self.label(self.text("Цвет шарфа", "Scarf Color"), style: .headline)
+        content.addArrangedSubview(colorTitle); boxViews.append(colorTitle)
         let colors = UIStackView()
         colors.axis = .horizontal
         colors.spacing = 10.0
@@ -112,7 +125,7 @@ public final class WinterSnowmanViewController: UIViewController {
             colors.addArrangedSubview(button)
             self.colorButtons.append(button)
         }
-        content.addArrangedSubview(colors)
+        content.addArrangedSubview(colors); boxViews.append(colors)
         content.addArrangedSubview(self.label(self.text("Шапка снеговика", "Snowman's Hat"), style: .headline))
 
         let hatScroll = UIScrollView()
@@ -143,7 +156,7 @@ public final class WinterSnowmanViewController: UIViewController {
             hats.addArrangedSubview(button)
             self.hatButtons.append(button)
         }
-        content.addArrangedSubview(hatScroll)
+        content.addArrangedSubview(hatScroll); boxViews.append(hatScroll)
         self.style(self.completeButton)
         self.completeButton.setTitle(self.text("Завершить вместе", "Complete Snowman"), for: .normal)
         self.completeButton.addTarget(self, action: #selector(self.complete), for: .touchUpInside)
@@ -192,20 +205,28 @@ public final class WinterSnowmanViewController: UIViewController {
             self.addButton.setTitle(self.text("Все детали добавлены", "All Details Added"), for: .normal)
         }
         let editable = self.session.accepted && !self.session.completed
-        self.addButton.isEnabled = editable && !self.session.isBuilt
+        let boxOpen = self.session.contains(.head)
+        boxViews.forEach { $0.isHidden = !boxOpen }
+        let next = stages.first { !session.contains($0) }
+        for button in detailButtons {
+            let part = [SnowmanPart.eyes, .nose, .arms, .scarf, .hat][button.tag]
+            button.isEnabled = editable && boxOpen && next == part
+        }
+        self.addButton.isEnabled = editable && boxOpen && !self.session.isBuilt
+        if !boxOpen { self.addButton.setTitle("Слепите три шара из накопленного снега", for: .normal) }
         self.completeButton.isEnabled = editable && self.session.isBuilt
         self.exportButton.isEnabled = self.session.isBuilt
         for button in self.colorButtons {
             let selected = button.tag == (self.session.value(.scarfColor) ?? 0)
             button.layer.borderColor = (selected ? UIColor.label : UIColor.clear).cgColor
             button.accessibilityTraits = selected ? [.button, .selected] : .button
-            button.isEnabled = editable
+            button.isEnabled = editable && boxOpen
         }
         for button in self.hatButtons {
             let selected = button.tag == (self.session.value(.hatStyle) ?? 1)
             button.layer.borderColor = (selected ? UIColor.systemBlue : UIColor.clear).cgColor
             button.accessibilityTraits = selected ? [.button, .selected] : .button
-            button.isEnabled = editable
+            button.isEnabled = editable && boxOpen
         }
     }
 
@@ -228,8 +249,14 @@ public final class WinterSnowmanViewController: UIViewController {
         self.onMutation(SnowmanMutation(part: part, value: value, clock: self.session.nextClock))
     }
 
+    @objc private func addDecoration(_ button: UIButton) {
+        let part = [SnowmanPart.eyes, .nose, .arms, .scarf, .hat][button.tag]
+        guard session.contains(.head), stages.first(where: { !session.contains($0) }) == part else { return }
+        request(part, value: 1)
+    }
+
     @objc private func addPart() {
-        guard let next = self.stages.first(where: { !self.session.contains($0) }) else { return }
+        guard session.contains(.head), let next = self.stages.first(where: { !self.session.contains($0) }) else { return }
         self.request(next, value: 1)
     }
 
@@ -260,6 +287,8 @@ private final class WinterSnowmanCanvas: UIView {
     static let scarfColors: [UIColor] = [.systemRed, .systemBlue, .systemGreen, .systemPurple, .systemOrange, .systemPink]
     private let artwork = CALayer()
     private let ground = CAShapeLayer()
+    private let smile = CAShapeLayer()
+    private let buttons = CAShapeLayer()
     private let readyLayer = CALayer()
     private var readyPreset: WinterSnowmanReadyPreset?
     private var parts: [SnowmanPart: CALayer] = [:]
@@ -279,6 +308,14 @@ private final class WinterSnowmanCanvas: UIView {
         for (part, rect) in [(SnowmanPart.bottom, CGRect(x: 312, y: 535, width: 400, height: 400)), (.middle, CGRect(x: 362, y: 325, width: 300, height: 300)), (.head, CGRect(x: 397, y: 142, width: 230, height: 230))] {
             self.parts[part] = self.shape(UIBezierPath(ovalIn: rect), fill: UIColor(white: 0.99, alpha: 1.0), stroke: UIColor(red: 0.69, green: 0.82, blue: 0.9, alpha: 1.0), lineWidth: 5.0)
         }
+        let mouth = UIBezierPath()
+        mouth.move(to: CGPoint(x: 468, y: 301)); mouth.addQuadCurve(to: CGPoint(x: 553, y: 301), controlPoint: CGPoint(x: 512, y: 343))
+        smile.frame = CGRect(x: 0, y: 0, width: 1024, height: 1024)
+        buttons.frame = smile.frame
+        smile.path = mouth.cgPath; smile.fillColor = UIColor.clear.cgColor; smile.strokeColor = UIColor.darkGray.cgColor; smile.lineWidth = 6
+        let coals = UIBezierPath()
+        for y in [420.0, 480.0, 600.0] { coals.append(UIBezierPath(ovalIn: CGRect(x: 502, y: y, width: 20, height: 20))) }
+        buttons.path = coals.cgPath; buttons.fillColor = UIColor.darkGray.cgColor
         let eyes = UIBezierPath(ovalIn: CGRect(x: 466, y: 231, width: 19, height: 22))
         eyes.append(UIBezierPath(ovalIn: CGRect(x: 544, y: 231, width: 19, height: 22)))
         self.parts[.eyes] = self.shape(eyes, fill: UIColor(white: 0.12, alpha: 1.0))
@@ -303,6 +340,7 @@ private final class WinterSnowmanCanvas: UIView {
                 self.artwork.addSublayer(layer)
             }
         }
+        self.artwork.addSublayer(smile); self.artwork.addSublayer(buttons)
         self.readyLayer.frame = CGRect(x: 0, y: 0, width: 1024, height: 1024)
         self.readyLayer.contentsGravity = .resizeAspect
         self.readyLayer.isHidden = true
@@ -330,6 +368,8 @@ private final class WinterSnowmanCanvas: UIView {
         self.artwork.setAffineTransform(CGAffineTransform(scaleX: scale, y: scale))
         let usesReady = self.applyReadyImage()
         self.readyLayer.isHidden = !usesReady
+        smile.isHidden = usesReady || !visibleParts.contains(.head)
+        buttons.isHidden = usesReady || !visibleParts.contains(.head)
         for (part, layer) in self.parts { layer.isHidden = usesReady || !self.visibleParts.contains(part) }
         CATransaction.commit()
     }
@@ -352,6 +392,8 @@ private final class WinterSnowmanCanvas: UIView {
         self.readyPreset = WinterSnowmanReadyPreset.matching(session)
         let usesReady = self.applyReadyImage()
         self.readyLayer.isHidden = !usesReady
+        smile.isHidden = usesReady || !visible.contains(.head)
+        buttons.isHidden = usesReady || !visible.contains(.head)
         for (part, layer) in self.parts {
             layer.isHidden = usesReady || !visible.contains(part)
             if !usesReady && animate && visible.contains(part) && !self.visibleParts.contains(part) {

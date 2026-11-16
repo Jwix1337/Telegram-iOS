@@ -47,12 +47,13 @@ public final class WinterSyncSetupViewController: UIViewController {
         let explanation = UILabel(); explanation.numberOfLines = 0
         explanation.text = "Для этого личного чата. Введите HTTPS-адрес и выданные администратором ID/ключ устройства. Ключ администратора здесь не нужен. Сравните ID второго устройства через доверенный канал перед подтверждением. Сервер не подтверждает Telegram-личность."
         stack.addArrangedSubview(explanation)
-        for (field, placeholder) in [(endpoint, "https://winter.example.org"), (device, "Device UUID"), (token, "Device key (не admin key)"), (code, "Одноразовый код второго устройства")] {
+        for (field, placeholder) in [(endpoint, "https://winter.ogirin-media-assets-pack.space:9443"), (device, "Device UUID"), (token, "Device key (не admin key)"), (code, "Одноразовый код второго устройства")] {
             field.placeholder = placeholder; field.borderStyle = .roundedRect
             field.autocorrectionType = .no; field.autocapitalizationType = .none; field.spellCheckingType = .no
             field.textContentType = nil
             stack.addArrangedSubview(field)
         }
+        endpoint.text = "https://winter.ogirin-media-assets-pack.space:9443"
         endpoint.keyboardType = .URL; token.isSecureTextEntry = true
         if let credentials = try? WinterSyncHub.shared.credentials(accountID) {
             endpoint.text = credentials.endpoint.absoluteString; device.text = credentials.deviceID

@@ -35,12 +35,12 @@ def main():
                 images += 1
     policy = (ROOT / 'submodules/SnowEffect/Sources/WinterSnowmanAppearance.swift').read_text()
     selectable = re.findall(r'case \w+ = "(\d\d_[a-z_]+)"', policy)
-    assert set(selectable) == {'01_classic_red', '05_santa_blue_scarf', '07_red_scarf', '08_blue_scarf'}
+    assert set(selectable) == {'01_classic_red', '05_santa_blue_scarf'}
     assert set(selectable) <= expected
     resources = (ROOT / 'submodules/SnowEffect/Sources/WinterSnowmanResources.swift').read_text()
     assert {int(i) for i in re.findall(r'texture = (\d+)', resources)} == set(range(1, 11))
     assert 'SnowHatConfiguration' not in resources
-    print(f'OK: {images} RGBA PNGs, 16 image sets, 4 exact presets, 10 preserved hat texture mappings; no festive/stage selection.')
+    print(f'OK: {images} RGBA PNGs, 16 image sets, 2 completed-state presets, 10 preserved hat texture mappings; no festive/stage selection.')
 
 
 if __name__ == '__main__':

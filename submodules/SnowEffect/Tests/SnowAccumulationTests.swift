@@ -3,6 +3,26 @@ import XCTest
 @testable import SnowEffect
 
 final class SnowAccumulationTests: XCTestCase {
+    func testBallReservationInsufficientSnowCancellationAndDuplicateFinish() throws {
+        var model = SnowAccumulationModel()
+        XCTAssertNil(model.reserveBall())
+        model.advance(seconds: 1000, settings: SnowEffectSettings(), energyFactor: 1)
+        let before = model.coverage
+        let id = try XCTUnwrap(model.reserveBall())
+        XCTAssertEqual(model.coverage, before - SnowAccumulationModel.ballCost, accuracy: 0.000001)
+        XCTAssertNil(model.reserveBall())
+        model.advance(seconds: 1000, settings: SnowEffectSettings(), energyFactor: 1)
+        XCTAssertTrue(model.finishBall(id, commit: false))
+        XCTAssertEqual(model.coverage, before, accuracy: 0.000001)
+        XCTAssertFalse(model.finishBall(id, commit: false))
+        let next = try XCTUnwrap(model.reserveBall())
+        XCTAssertTrue(model.finishBall(next, commit: true))
+        let consumed = model.coverage
+        XCTAssertFalse(model.finishBall(next, commit: true))
+        XCTAssertFalse(model.finishBall(next, commit: false))
+        XCTAssertEqual(model.coverage, consumed)
+    }
+
     func testGrowthIsGradualBoundedAndPreservedAcrossHeightChanges() {
         var model = SnowAccumulationModel(profile: [0.0, 0.4, 1.0, 0.7, 0.0])
         let settings = SnowEffectSettings()
