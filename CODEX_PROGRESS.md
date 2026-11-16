@@ -1,3 +1,15 @@
+# Публикация Winter Sync — 2026-11-16
+
+Ветка codex/winter-validation. Перед публикацией рабочее дерево чистое; удалённая ветка отставала на три локальных коммита: e848e51 (backend), 7bd12bf (iOS transport), 4b3d9a5 (стабилизация/инструкция). Изменения кода не переписывались и история не заменялась.
+
+Актуальная проверка: python3 -m unittest discover -s winter-sync -q — 13 тестов прошли, 2.221с. git diff --check без ошибок. Проверены добавленные строки всех трёх неопубликованных коммитов и имена 17 изменённых файлов на private keys, типовые access-token/JWT паттерны и credential/database files; совпадений нет. Выданные production-секреты не обнаружены; тестовые credentials — явные синтетические fixtures. Проверка не является гарантией полного аудита всей upstream-истории.
+
+Сервер: winter-sync/app.py; зависимости requirements.txt и requirements-test.txt; тесты test_service.py и test_integration.py; API.md; безопасная инструкция winter-sync/DEPLOYMENT.md. __pycache__ не отслеживается Git. Swift/XCTest и реальная сеть двух iPhone по-прежнему не проверены.
+
+Публикация: обычный fast-forward push HEAD:refs/heads/codex/winter-validation; force push запрещён. Origin/master перед публикацией: e5326ede940f12b5629c9d9e2eea48171731f0da. Сборки, развёртывание и изменения master не выполняются. После push сверить удалённый SHA с HEAD.
+
+---
+
 # Стабилизация Winter Sync — 2026-11-16
 
 Ветка codex/winter-validation, один агент. Новые функции не добавлялись, рабочие компоненты не переписывались. Новых подтверждённых дефектов production-кода в доступных проверках не обнаружено.
