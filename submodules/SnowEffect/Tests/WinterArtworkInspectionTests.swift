@@ -8,7 +8,7 @@ import XCTest
 final class WinterArtworkInspectionTests: XCTestCase {
     func testInspectTenStylesInBothThemesAndThreeAvatarSizes() throws {
         guard ProcessInfo.processInfo.environment["SNOW_RENDER_INSPECTION"] == "1",
-              let root = ProcessInfo.processInfo.environment["SNOW_WINTER_ASSET_ROOT"] else { return }
+              let root = ProcessInfo.processInfo.environment["SNOW_WINTER_ASSET_ROOT"] else { throw XCTSkip("Optional static inspection requires SNOW_RENDER_INSPECTION=1") }
         func load(_ path: String) throws -> CGImage {
             let source = try XCTUnwrap(CGImageSourceCreateWithURL(URL(fileURLWithPath: root).appendingPathComponent(path) as CFURL, nil))
             return try XCTUnwrap(CGImageSourceCreateImageAtIndex(source, 0, nil))
