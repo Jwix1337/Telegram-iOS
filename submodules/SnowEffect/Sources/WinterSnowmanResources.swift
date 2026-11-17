@@ -14,6 +14,18 @@ enum WinterSnowmanResources {
         UIImage(named: "SnowmanBodyReference", in: .main, compatibleWith: nil)
     }
 
+    static func accessory(_ part: WinterSnowmanCutout.Part, color: Int = 0) -> UIImage? {
+        let key = ("snowman-material-v1-" + part.rawValue + "-" + String(color)) as NSString
+        if let image = cache.object(forKey: key) { return image }
+        guard let source = ready(.classicRed, full: true, traits: UITraitCollection(userInterfaceStyle: .light))?.cgImage else { return nil }
+        let colors: [[CGFloat]] = [[0.89, 0.07, 0.13], [0.10, 0.44, 0.91], [0.12, 0.65, 0.36], [0.57, 0.26, 0.79], [0.95, 0.46, 0.10], [0.93, 0.30, 0.58]]
+        let tint = part == .scarf && (1..<colors.count).contains(color) ? colors[color] : nil
+        guard let sprite = WinterSnowmanCutout.image(from: source, part: part, tint: tint) else { return nil }
+        let image = UIImage(cgImage: sprite)
+        cache.setObject(image, forKey: key, cost: sprite.bytesPerRow * sprite.height)
+        return image
+    }
+
     static func hat(_ style: WinterSnowmanHatStyle) -> UIImage? {
         // Explicit artwork mapping, not a conversion between the two features' state IDs.
         let texture: Int

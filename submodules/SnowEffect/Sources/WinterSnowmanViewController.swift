@@ -291,6 +291,7 @@ final class WinterSnowmanCanvas: UIView {
     private let buttons = CAShapeLayer()
     private let bodyLayer = CALayer()
     private let scarfLayer = CAGradientLayer()
+    private let scarfArtwork = CALayer()
     private var parts: [SnowmanPart: CALayer] = [:]
     private var visibleParts = Set<SnowmanPart>()
 
@@ -341,7 +342,20 @@ final class WinterSnowmanCanvas: UIView {
         self.scarfLayer.startPoint = CGPoint(x: 0.3, y: 0.3)
         self.scarfLayer.endPoint = CGPoint(x: 0.65, y: 0.65)
         self.scarfLayer.mask = self.shape(scarf, fill: .white)
-        self.parts[.scarf] = self.scarfLayer
+        let scarfContainer = CALayer()
+        scarfContainer.frame = self.scarfLayer.frame
+        self.scarfArtwork.frame = self.scarfLayer.frame
+        scarfContainer.addSublayer(self.scarfLayer)
+        scarfContainer.addSublayer(self.scarfArtwork)
+        self.parts[.scarf] = scarfContainer
+        for (part, material) in [(SnowmanPart.arms, WinterSnowmanCutout.Part.arms), (.nose, .nose)] {
+            if let image = WinterSnowmanResources.accessory(material) {
+                let layer = CALayer()
+                layer.frame = CGRect(x: 0, y: 0, width: 1024, height: 1024)
+                layer.contents = image.cgImage
+                self.parts[part] = layer
+            }
+        }
         let hat = CALayer()
         hat.contentsGravity = .resizeAspect
         self.parts[.hat] = hat
@@ -395,6 +409,10 @@ final class WinterSnowmanCanvas: UIView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         let colorIndex = min(Self.scarfColors.count - 1, max(0, session.value(.scarfColor) ?? 0))
+        let scarf = WinterSnowmanResources.accessory(.scarf, color: colorIndex)
+        self.scarfArtwork.contents = scarf?.cgImage
+        self.scarfArtwork.isHidden = scarf == nil
+        self.scarfLayer.isHidden = scarf != nil
         let color = Self.scarfColors[colorIndex]
         self.scarfLayer.colors = [color.withAlphaComponent(0.85).cgColor, color.cgColor, color.withAlphaComponent(0.7).cgColor]
         if let style = WinterSnowmanHatStyle(rawValue: session.value(.hatStyle) ?? 1),

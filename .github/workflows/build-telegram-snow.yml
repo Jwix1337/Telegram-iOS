@@ -41,7 +41,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: telegram-snow-device-${{ github.ref }}
+  group: telegram-snow-${{ inputs.models_only && 'models' || 'device' }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:

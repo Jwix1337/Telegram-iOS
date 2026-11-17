@@ -39,7 +39,7 @@ public final class WinterMiniSnowmanView: UIButton {
             visualKey = ""; setImage(nil, for: .normal); return
         }
         let details = SnowmanPart.allCases.map { $0.rawValue + "=" + String(session.value($0) ?? -1) }.joined(separator: ",")
-        let key = "snowman-v3|\(dark)|" + details
+        let key = "snowman-v4|\(dark)|" + details
         guard key != visualKey else { return }
         visualKey = key
         if let image = Self.cache.object(forKey: key as NSString) { setImage(image, for: .normal); return }
