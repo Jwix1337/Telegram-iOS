@@ -320,7 +320,7 @@ final class WinterSnowmanCanvas: UIView {
         self.bodyLayer.contentsGravity = .resizeAspect
         self.bodyLayer.isHidden = true
         let mouth = UIBezierPath()
-        mouth.move(to: CGPoint(x: 455, y: 405)); mouth.addQuadCurve(to: CGPoint(x: 554, y: 405), controlPoint: CGPoint(x: 505, y: 447))
+        mouth.move(to: CGPoint(x: 455, y: 380)); mouth.addQuadCurve(to: CGPoint(x: 554, y: 380), controlPoint: CGPoint(x: 505, y: 426))
         smile.frame = CGRect(x: 0, y: 0, width: 1024, height: 1024)
         buttons.frame = smile.frame
         smile.path = mouth.cgPath; smile.fillColor = UIColor.clear.cgColor; smile.strokeColor = UIColor.darkGray.cgColor; smile.lineWidth = 6
@@ -348,13 +348,19 @@ final class WinterSnowmanCanvas: UIView {
         scarfContainer.addSublayer(self.scarfLayer)
         scarfContainer.addSublayer(self.scarfArtwork)
         self.parts[.scarf] = scarfContainer
-        for (part, material) in [(SnowmanPart.arms, WinterSnowmanCutout.Part.arms), (.nose, .nose)] {
+        for (part, material) in [(SnowmanPart.arms, WinterSnowmanCutout.Part.arms), (.nose, .nose), (.eyes, .eyes)] {
             if let image = WinterSnowmanResources.accessory(material) {
                 let layer = CALayer()
                 layer.frame = CGRect(x: 0, y: 0, width: 1024, height: 1024)
                 layer.contents = image.cgImage
                 self.parts[part] = layer
             }
+        }
+        if let image = WinterSnowmanResources.accessory(.smile) {
+            self.smile.path = nil; self.smile.contents = image.cgImage
+        }
+        if let image = WinterSnowmanResources.accessory(.buttons) {
+            self.buttons.path = nil; self.buttons.contents = image.cgImage
         }
         let hat = CALayer()
         hat.contentsGravity = .resizeAspect

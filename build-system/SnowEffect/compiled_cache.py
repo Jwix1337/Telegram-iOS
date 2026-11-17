@@ -14,7 +14,7 @@ import subprocess
 import tarfile
 import tempfile
 
-MAX_BYTES = 5 * 1024 ** 3
+MAX_BYTES = 3 * 1024 ** 3
 
 
 def keys():
@@ -47,7 +47,7 @@ def save(source, bundle, secret, budget=MAX_BYTES):
     source, bundle = Path(source), Path(bundle)
     if not source.is_dir():
         return 0
-    files = [p for p in source.rglob('*') if p.is_file() and not p.is_symlink()]
+    files = [p for p in source.rglob('*') if p.is_file() and not p.is_symlink() and not any(part.startswith('tmp') or part.endswith('.tmp') for part in p.relative_to(source).parts)]
     files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     bundle.mkdir(parents=True, exist_ok=True)
     encrypted = bundle / 'actions.enc'
@@ -132,7 +132,7 @@ def main():
         return
     try:
         if args.operation == 'save':
-            print('Encrypted compiled cache saved:', save(args.cache, args.bundle, secret), 'entries; plaintext budget 5 GiB')
+            print('Encrypted compiled cache saved:', save(args.cache, args.bundle, secret), 'entries; plaintext budget 3 GiB')
         else:
             print('Compiled cache restored' if restore(args.cache, args.bundle, secret) else 'No previous compiled cache; this build starts cold')
     except (ValueError, OSError, tarfile.TarError):

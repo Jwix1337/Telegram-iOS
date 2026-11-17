@@ -4,7 +4,7 @@ import CoreGraphics
 /// Derives independent, cached accessories from the existing fixed reference, not from stage snapshots.
 /// No body pixels enter these sprites. The immutable source is always the same red knitted preset.
 enum WinterSnowmanCutout {
-    enum Part: String { case arms, scarf, nose }
+    enum Part: String { case arms, scarf, nose, eyes, smile, buttons }
 
     static func image(from source: CGImage, part: Part, tint: [CGFloat]? = nil) -> CGImage? {
         let side = 512
@@ -22,6 +22,9 @@ enum WinterSnowmanCutout {
         case .arms: bounds = (90, 198, 422, 294)
         case .scarf: bounds = (140, 198, 368, 390)
         case .nose: bounds = (238, 163, 292, 208)
+        case .eyes: bounds = (212, 150, 300, 180)
+        case .smile: bounds = (218, 180, 289, 206)
+        case .buttons: bounds = (235, 262, 276, 390)
         }
         // Flood-fill the exterior of the material mask. Enclosed white embroidery and
         // highlights belong to the cloth/wood; the surrounding white snow stays transparent.
@@ -35,6 +38,7 @@ enum WinterSnowmanCutout {
             case .arms: belongs = r > g * 1.18 && g > b * 1.16 && g > 18
             case .scarf: belongs = r > g * 1.45 && r > b * 1.45 && g <= b * 1.45 && r > 45
             case .nose: belongs = r > g * 1.2 && g > b * 1.5 && g > 35
+            case .eyes, .smile, .buttons: belongs = max(r, g, b) < 140 && max(r, g, b) - min(r, g, b) < 40
             }
             if belongs { mask[index] = 1 }
         } }
@@ -56,7 +60,8 @@ enum WinterSnowmanCutout {
             components.append(component)
         } }
         mask = [UInt8](repeating: 0, count: mask.count)
-        for component in components.sorted(by: { $0.count > $1.count }).prefix(part == .arms ? 2 : 1) {
+        let componentCount = part == .buttons ? 3 : ((part == .arms || part == .eyes) ? 2 : 1)
+        for component in components.sorted(by: { $0.count > $1.count }).prefix(componentCount) {
             for index in component { mask[index] = 1 }
         }
         var exterior: [Int] = []

@@ -51,6 +51,7 @@ jobs:
     timeout-minutes: 10
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+      SNOW_RENDER_INSPECTION: '1'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -200,7 +201,8 @@ jobs:
           TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
         shell: bash
         run: |
-          "$SNOW_BAZEL" shutdown
+          # CAS blobs are immutable. Waiting on `bazel shutdown` can block behind
+          # a cancelled but still-running client until the job's cleanup deadline.
           python3 build-system/SnowEffect/compiled_cache.py save --cache="$SNOW_ACTION_CACHE" --bundle="$SNOW_ENCRYPTED_CACHE"
 
       - name: Save encrypted compilation cache for subsequent builds

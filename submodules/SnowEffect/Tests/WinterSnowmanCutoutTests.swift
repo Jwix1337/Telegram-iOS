@@ -18,14 +18,23 @@ final class WinterSnowmanCutoutTests: XCTestCase {
 
     func testAuthenticPartsHaveTransparentBackgroundAndNeverIncludeTheBodyOrHat() throws {
         let source = try self.source()
-        for part in [WinterSnowmanCutout.Part.scarf, .arms, .nose] {
+        for part in [WinterSnowmanCutout.Part.scarf, .arms, .nose, .eyes, .smile, .buttons] {
             let image = try XCTUnwrap(WinterSnowmanCutout.image(from: source, part: part))
             let data = try bytes(image)
+            let vertical: (Int, Int)
+            switch part {
+            case .scarf: vertical = (198, 390)
+            case .arms: vertical = (198, 294)
+            case .nose: vertical = (163, 208)
+            case .eyes: vertical = (150, 180)
+            case .smile: vertical = (180, 206)
+            case .buttons: vertical = (262, 390)
+            }
             var visible = 0
             for y in 0..<512 { for x in 0..<512 where data[(y * 512 + x) * 4 + 3] > 0 {
                 visible += 1
-                XCTAssertGreaterThanOrEqual(y, part == .nose ? 163 : 198)
-                XCTAssertLessThan(y, part == .scarf ? 390 : (part == .nose ? 208 : 294))
+                XCTAssertGreaterThanOrEqual(y, vertical.0)
+                XCTAssertLessThan(y, vertical.1)
                 XCTAssertGreaterThanOrEqual(x, 90)
                 XCTAssertLessThan(x, 422)
                 if part == .arms { XCTAssertTrue(x < 185 || x > 325, "Arms must not reveal the scarf before it is added") }
@@ -33,14 +42,16 @@ final class WinterSnowmanCutoutTests: XCTestCase {
             XCTAssertGreaterThan(visible, part == .scarf ? 5000 : (part == .arms ? 600 : 40))
             XCTAssertEqual(data[(430 * 512 + 250) * 4 + 3], 0)  // Bottom ball.
             XCTAssertEqual(data[(80 * 512 + 250) * 4 + 3], 0)   // Hat.
+            guard ProcessInfo.processInfo.environment["SNOW_RENDER_INSPECTION"] == "1" else { continue }
             let png = NSMutableData()
             if let destination = CGImageDestinationCreateWithData(png, "public.png" as CFString, 1, nil) {
                 CGImageDestinationAddImage(destination, image, nil)
                 if CGImageDestinationFinalize(destination) {
                     // Inspection aid in CI logs; decode to a local PNG without dumping the log in chat.
                     let encoded = Array((png as Data).base64EncodedString())
-                    for start in stride(from: 0, to: encoded.count, by: 8000) {
-                        print("SNOW_PART_PNG_" + part.rawValue + "_" + String(start / 8000) + ":" + String(encoded[start..<min(encoded.count, start + 8000)]))
+                    for start in stride(from: 0, to: encoded.count, by: 256) {
+                        let line = "SNOW_PART_PNG_" + part.rawValue + "_" + String(start / 256) + ":" + String(encoded[start..<min(encoded.count, start + 256)]) + "\n"
+                        FileHandle.standardOutput.write(Data(line.utf8))
                     }
                 }
             }
