@@ -9,6 +9,11 @@ enum WinterSnowmanResources {
         return cache
     }()
 
+    static var bareBody: UIImage? {
+        // Exactly the unadorned, three-ball illustration; no later stage is treated as a layer.
+        UIImage(named: "SnowmanBodyReference", in: .main, compatibleWith: nil)
+    }
+
     static func hat(_ style: WinterSnowmanHatStyle) -> UIImage? {
         // Explicit artwork mapping, not a conversion between the two features' state IDs.
         let texture: Int

@@ -2,13 +2,11 @@ import Foundation
 import CoreGraphics
 
 public enum SnowHatLayout {
-    public static let photoScale: CGFloat = 0.78
+    public static let photoScale: CGFloat = 0.68
     public static func photoFrame(in allocation: CGRect, decorated: Bool) -> CGRect {
-        let scale: CGFloat = decorated ? self.photoScale : 1
-        return CGRect(x: allocation.minX + allocation.width * (1 - scale) / 2, y: allocation.minY + allocation.height * (1 - scale), width: allocation.width * scale, height: allocation.height * scale)
-    }
-    public static func crownBounds(in allocation: CGRect) -> CGRect {
-        CGRect(x: allocation.minX, y: allocation.minY, width: allocation.width, height: allocation.height * 0.58)
+        guard decorated else { return allocation }
+        let side = min(allocation.width, allocation.height) * self.photoScale
+        return CGRect(x: allocation.midX - side / 2, y: allocation.maxY - side, width: side, height: side)
     }
 }
 
@@ -47,33 +45,25 @@ enum SnowHatGeometry {
             CGPoint(x: 0.48, y: 0.68), CGPoint(x: 0.50, y: 0.66),
             CGPoint(x: 0.53, y: 0.64), CGPoint(x: 0.45, y: 0.53)
         ]
-        let widths: [CGFloat] = [0.96, 0.96, 0.94, 0.92, 0.96, 0.96, 0.94, 0.92, 0.94, 0.94]
+        let widths: [CGFloat] = [1.20, 1.12, 1.18, 1.05, 1.12, 1.18, 1.18, 1.10, 1.14, 1.12]
         guard (1...10).contains(hatID) else { return nil }
         return Artwork(crop: bounds[hatID - 1].insetBy(dx: -3, dy: -3), brim: brims[hatID - 1], width: widths[hatID - 1])
     }
 
-    static func placement(configuration: SnowHatConfiguration, avatarBounds: CGRect, imageSize: CGSize, confinement: CGRect? = nil) -> Placement? {
+    static func placement(configuration: SnowHatConfiguration, avatarBounds: CGRect, imageSize: CGSize) -> Placement? {
         guard configuration.isValid, imageSize.width > 0, imageSize.height > 0,
               let artwork = artwork(hatID: configuration.hatID) else { return nil }
         let diameter = min(avatarBounds.width, avatarBounds.height)
         guard diameter > 0 else { return nil }
-        // Preview can extend above the actual circle. Compact hosts reserve a crown
-        // inside their existing allocation and supply the reduced photo's real frame.
-        let envelope = confinement ?? CGRect(x: avatarBounds.midX - diameter * 0.60, y: avatarBounds.minY - diameter * 0.72, width: diameter * 1.20, height: diameter * 1.44)
+        // Resolve exactly the same normalized transform in the editor and every host.
+        // A per-host fit/clamp silently changed saved scale and position on small avatars.
         let angle = CGFloat(configuration.rotation)
         let cosine = cos(angle), sine = sin(angle)
-        var width = diameter * artwork.width * 1.12 * CGFloat(configuration.scale)
-        var height = width * imageSize.height / imageSize.width
-        let rotatedWidth = abs(cosine) * width + abs(sine) * height
-        let rotatedHeight = abs(sine) * width + abs(cosine) * height
-        let fit = min(1, min(envelope.width / rotatedWidth, envelope.height / rotatedHeight))
-        width *= fit; height *= fit
-        let halfWidth = (abs(cosine) * width + abs(sine) * height) / 2
-        let halfHeight = (abs(sine) * width + abs(cosine) * height) / 2
+        let width = diameter * artwork.width * CGFloat(configuration.scale)
+        let height = width * imageSize.height / imageSize.width
         let anchor = CGPoint(x: (artwork.brim.x - 0.5) * width, y: (artwork.brim.y - 0.5) * height)
-        // Preserve stored normalized deltas; -0.4 is the editor's original neutral Y.
-        let desired = CGPoint(x: avatarBounds.midX + CGFloat(configuration.offsetX) * diameter - (anchor.x * cosine - anchor.y * sine), y: avatarBounds.minY + diameter * 0.08 + CGFloat(configuration.offsetY + 0.4) * diameter - (anchor.x * sine + anchor.y * cosine))
-        let center = CGPoint(x: min(envelope.maxX - halfWidth, max(envelope.minX + halfWidth, desired.x)), y: min(envelope.maxY - halfHeight, max(envelope.minY + halfHeight, desired.y)))
+        // -0.4 remains the v1 neutral Y; existing saved transforms need no migration.
+        let center = CGPoint(x: avatarBounds.midX + CGFloat(configuration.offsetX) * diameter - (anchor.x * cosine - anchor.y * sine), y: avatarBounds.minY + diameter * 0.15 + CGFloat(configuration.offsetY + 0.4) * diameter - (anchor.x * sine + anchor.y * cosine))
         return Placement(size: CGSize(width: width, height: height), center: center)
     }
 }

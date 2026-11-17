@@ -289,73 +289,77 @@ final class WinterSnowmanCanvas: UIView {
     private let ground = CAShapeLayer()
     private let smile = CAShapeLayer()
     private let buttons = CAShapeLayer()
-    private let readyLayer = CALayer()
-    private var readyPreset: WinterSnowmanReadyPreset?
+    private let bodyLayer = CALayer()
+    private let scarfLayer = CAGradientLayer()
     private var parts: [SnowmanPart: CALayer] = [:]
     private var visibleParts = Set<SnowmanPart>()
 
     init(frame: CGRect, transparent: Bool = false) {
         super.init(frame: frame)
         self.isOpaque = !transparent
-        self.backgroundColor = transparent ? .clear : UIColor(red: 0.78, green: 0.89, blue: 0.96, alpha: 1.0)
+        self.backgroundColor = transparent ? .clear : .secondarySystemBackground
         self.isUserInteractionEnabled = false
         self.layer.addSublayer(self.artwork)
         self.ground.isHidden = transparent
         self.ground.fillColor = UIColor(red: 0.92, green: 0.97, blue: 1.0, alpha: 1.0).cgColor
-        self.ground.path = UIBezierPath(ovalIn: CGRect(x: 70.0, y: 870.0, width: 884.0, height: 190.0)).cgPath
+        self.ground.path = UIBezierPath(ovalIn: CGRect(x: 230, y: 930, width: 560, height: 50)).cgPath
         self.artwork.addSublayer(self.ground)
 
         self.parts[.arms] = self.shape(self.arms(), fill: .clear, stroke: UIColor(red: 0.34, green: 0.22, blue: 0.15, alpha: 1.0), lineWidth: 14.0)
-        for (part, rect) in [(SnowmanPart.bottom, CGRect(x: 312, y: 535, width: 400, height: 400)), (.middle, CGRect(x: 362, y: 325, width: 300, height: 300)), (.head, CGRect(x: 397, y: 142, width: 230, height: 230))] {
-            self.parts[part] = self.shape(UIBezierPath(ovalIn: rect), fill: UIColor(white: 0.99, alpha: 1.0), stroke: UIColor(red: 0.69, green: 0.82, blue: 0.9, alpha: 1.0), lineWidth: 5.0)
+        for (part, rect) in [(SnowmanPart.bottom, WinterSnowmanGeometry.bottom), (.middle, WinterSnowmanGeometry.middle), (.head, WinterSnowmanGeometry.head)] {
+            let ball = CALayer()
+            ball.frame = rect
+            ball.contents = Self.snowballTexture
+            self.parts[part] = ball
         }
+        // Keep one coherent body for every hat/scarf. The previous whole-character
+        // substitutions changed the entire snowman when only an accessory changed.
+        self.bodyLayer.frame = CGRect(x: 0, y: 0, width: 1024, height: 1024)
+        self.bodyLayer.contents = WinterSnowmanResources.bareBody?.cgImage
+        self.bodyLayer.contentsGravity = .resizeAspect
+        self.bodyLayer.isHidden = true
         let mouth = UIBezierPath()
-        mouth.move(to: CGPoint(x: 468, y: 301)); mouth.addQuadCurve(to: CGPoint(x: 553, y: 301), controlPoint: CGPoint(x: 512, y: 343))
+        mouth.move(to: CGPoint(x: 455, y: 405)); mouth.addQuadCurve(to: CGPoint(x: 554, y: 405), controlPoint: CGPoint(x: 505, y: 447))
         smile.frame = CGRect(x: 0, y: 0, width: 1024, height: 1024)
         buttons.frame = smile.frame
         smile.path = mouth.cgPath; smile.fillColor = UIColor.clear.cgColor; smile.strokeColor = UIColor.darkGray.cgColor; smile.lineWidth = 6
         let coals = UIBezierPath()
-        for y in [420.0, 480.0, 600.0] { coals.append(UIBezierPath(ovalIn: CGRect(x: 502, y: y, width: 20, height: 20))) }
+        for y in [555.0, 625.0, 775.0] { coals.append(UIBezierPath(ovalIn: CGRect(x: 495, y: y, width: 20, height: 20))) }
         buttons.path = coals.cgPath; buttons.fillColor = UIColor.darkGray.cgColor
-        let eyes = UIBezierPath(ovalIn: CGRect(x: 466, y: 231, width: 19, height: 22))
-        eyes.append(UIBezierPath(ovalIn: CGRect(x: 544, y: 231, width: 19, height: 22)))
+        let eyes = UIBezierPath(ovalIn: CGRect(x: 441, y: 330, width: 21, height: 23))
+        eyes.append(UIBezierPath(ovalIn: CGRect(x: 550, y: 330, width: 21, height: 23)))
         self.parts[.eyes] = self.shape(eyes, fill: UIColor(white: 0.12, alpha: 1.0))
         let nose = UIBezierPath()
-        nose.move(to: CGPoint(x: 507, y: 270))
-        nose.addQuadCurve(to: CGPoint(x: 605, y: 284), controlPoint: CGPoint(x: 548, y: 266))
-        nose.addQuadCurve(to: CGPoint(x: 507, y: 294), controlPoint: CGPoint(x: 552, y: 302))
+        nose.move(to: CGPoint(x: 500, y: 368))
+        nose.addQuadCurve(to: CGPoint(x: 606, y: 380), controlPoint: CGPoint(x: 546, y: 360))
+        nose.addQuadCurve(to: CGPoint(x: 500, y: 392), controlPoint: CGPoint(x: 553, y: 399))
         nose.close()
         self.parts[.nose] = self.shape(nose, fill: .systemOrange)
-        let scarf = UIBezierPath(roundedRect: CGRect(x: 394, y: 350, width: 238, height: 43), cornerRadius: 19.0)
-        scarf.append(UIBezierPath(roundedRect: CGRect(x: 554, y: 375, width: 42, height: 130), cornerRadius: 10.0))
-        self.parts[.scarf] = self.shape(scarf, fill: Self.scarfColors[0])
+        let scarf = UIBezierPath(roundedRect: CGRect(x: 363, y: 441, width: 286, height: 59), cornerRadius: 28.0)
+        scarf.append(UIBezierPath(roundedRect: CGRect(x: 562, y: 479, width: 55, height: 153), cornerRadius: 12.0))
+        self.scarfLayer.frame = CGRect(x: 0, y: 0, width: 1024, height: 1024)
+        self.scarfLayer.startPoint = CGPoint(x: 0.3, y: 0.3)
+        self.scarfLayer.endPoint = CGPoint(x: 0.65, y: 0.65)
+        self.scarfLayer.mask = self.shape(scarf, fill: .white)
+        self.parts[.scarf] = self.scarfLayer
         let hat = CALayer()
-        hat.bounds = CGRect(x: 0, y: 0, width: 320, height: 280)
-        hat.position = CGPoint(x: 512, y: 120)
         hat.contentsGravity = .resizeAspect
         self.parts[.hat] = hat
         // Arms sit behind the body, with the scarf and hat above their snow surfaces.
         for part in [SnowmanPart.arms, .bottom, .middle, .head, .eyes, .nose, .scarf, .hat] {
+            if part == .eyes { self.artwork.addSublayer(self.bodyLayer) }
             if let layer = self.parts[part] {
                 layer.isHidden = true
                 self.artwork.addSublayer(layer)
             }
         }
         self.artwork.addSublayer(smile); self.artwork.addSublayer(buttons)
-        self.readyLayer.frame = CGRect(x: 0, y: 0, width: 1024, height: 1024)
-        self.readyLayer.contentsGravity = .resizeAspect
-        self.readyLayer.isHidden = true
-        self.artwork.addSublayer(self.readyLayer)
     }
 
     required init?(coder: NSCoder) { preconditionFailure("init(coder:) has not been implemented") }
 
-    private func applyReadyImage() -> Bool {
-        guard let preset = self.readyPreset else { self.readyLayer.contents = nil; return false }
-        let full = max(self.bounds.width, self.bounds.height) * max(1.0, self.traitCollection.displayScale) > 180.0
-        let image = WinterSnowmanResources.ready(preset, full: full, traits: self.traitCollection)
-        self.readyLayer.contents = image?.cgImage
-        return image != nil
+    private var usesBodyReference: Bool {
+        self.bodyLayer.contents != nil && [SnowmanPart.bottom, .middle, .head].allSatisfy { self.visibleParts.contains($0) }
     }
 
     override func layoutSubviews() {
@@ -367,15 +371,17 @@ final class WinterSnowmanCanvas: UIView {
         let scale = min(self.bounds.width, self.bounds.height) / 1024.0
         self.artwork.position = CGPoint(x: (self.bounds.width - 1024.0 * scale) * 0.5, y: (self.bounds.height - 1024.0 * scale) * 0.5)
         self.artwork.setAffineTransform(CGAffineTransform(scaleX: scale, y: scale))
-        let usesReady = self.applyReadyImage()
-        self.readyLayer.isHidden = !usesReady
-        smile.isHidden = usesReady || !visibleParts.contains(.head)
-        buttons.isHidden = usesReady || !visibleParts.contains(.head)
-        for (part, layer) in self.parts { layer.isHidden = usesReady || !self.visibleParts.contains(part) }
+        self.bodyLayer.isHidden = !self.usesBodyReference
+        self.smile.isHidden = !self.visibleParts.contains(.head)
+        self.buttons.isHidden = !self.visibleParts.contains(.head)
+        for (part, layer) in self.parts {
+            layer.isHidden = !self.visibleParts.contains(part) || (self.usesBodyReference && [.bottom, .middle, .head].contains(part))
+        }
         CATransaction.commit()
     }
 
     func update(session: WinterSnowmanSession, animated: Bool) {
+        let previous = self.visibleParts
         var visible = Set<SnowmanPart>()
         for part in [SnowmanPart.bottom, .middle, .head, .eyes, .nose, .arms, .scarf, .hat] {
             guard session.contains(part) else { break }
@@ -383,21 +389,28 @@ final class WinterSnowmanCanvas: UIView {
         }
         let animate = animated && !UIAccessibility.isReduceMotionEnabled
             && !ProcessInfo.processInfo.isLowPowerModeEnabled
+            && ProcessInfo.processInfo.thermalState != .serious && ProcessInfo.processInfo.thermalState != .critical
             && SnowEffectPreferences.shared.settings.winterAnimationsEnabled
             && UIApplication.shared.applicationState == .active
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         let colorIndex = min(Self.scarfColors.count - 1, max(0, session.value(.scarfColor) ?? 0))
-        (self.parts[.scarf] as? CAShapeLayer)?.fillColor = Self.scarfColors[colorIndex].cgColor
-        self.parts[.hat]?.contents = WinterSnowmanHatStyle(rawValue: session.value(.hatStyle) ?? 1).flatMap(WinterSnowmanResources.hat)?.cgImage
-        self.readyPreset = WinterSnowmanReadyPreset.matching(session)
-        let usesReady = self.applyReadyImage()
-        self.readyLayer.isHidden = !usesReady
-        smile.isHidden = usesReady || !visible.contains(.head)
-        buttons.isHidden = usesReady || !visible.contains(.head)
+        let color = Self.scarfColors[colorIndex]
+        self.scarfLayer.colors = [color.withAlphaComponent(0.85).cgColor, color.cgColor, color.withAlphaComponent(0.7).cgColor]
+        if let style = WinterSnowmanHatStyle(rawValue: session.value(.hatStyle) ?? 1),
+           let image = WinterSnowmanResources.hat(style),
+           let placement = WinterSnowmanGeometry.hat(style, imageSize: image.size), let hat = self.parts[.hat] {
+            hat.contents = image.cgImage
+            hat.bounds = CGRect(origin: .zero, size: placement.size)
+            hat.position = placement.center
+        } else { self.parts[.hat]?.contents = nil }
+        self.visibleParts = visible
+        self.bodyLayer.isHidden = !self.usesBodyReference
+        smile.isHidden = !visible.contains(.head)
+        buttons.isHidden = !visible.contains(.head)
         for (part, layer) in self.parts {
-            layer.isHidden = usesReady || !visible.contains(part)
-            if !usesReady && animate && visible.contains(part) && !self.visibleParts.contains(part) {
+            layer.isHidden = !visible.contains(part) || (self.usesBodyReference && [.bottom, .middle, .head].contains(part))
+            if !layer.isHidden && animate && visible.contains(part) && !previous.contains(part) {
                 let opacity = CABasicAnimation(keyPath: "opacity")
                 opacity.fromValue = 0.0
                 opacity.toValue = 1.0
@@ -409,7 +422,7 @@ final class WinterSnowmanCanvas: UIView {
                 placement.timingFunction = CAMediaTimingFunction(name: .easeOut)
                 layer.add(opacity, forKey: "installation.opacity")
                 layer.add(placement, forKey: "installation.position")
-            } else if !animate || usesReady {
+            } else if !animate || layer.isHidden {
                 layer.removeAllAnimations()
             }
         }
@@ -421,6 +434,24 @@ final class WinterSnowmanCanvas: UIView {
     func stopAnimations() {
         self.parts.values.forEach { $0.removeAllAnimations() }
     }
+
+    private static let snowballTexture: CGImage? = {
+        let format = UIGraphicsImageRendererFormat(); format.scale = 1; format.opaque = false
+        return UIGraphicsImageRenderer(size: CGSize(width: 256, height: 256), format: format).image { context in
+            let c = context.cgContext
+            c.addEllipse(in: CGRect(x: 1, y: 1, width: 254, height: 254)); c.clip()
+            let colors = [UIColor.white.cgColor, UIColor(red: 0.88, green: 0.90, blue: 0.95, alpha: 1).cgColor, UIColor(red: 0.72, green: 0.77, blue: 0.86, alpha: 1).cgColor]
+            if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors as CFArray, locations: [0, 0.72, 1]) {
+                c.drawRadialGradient(gradient, startCenter: CGPoint(x: 94, y: 74), startRadius: 0, endCenter: CGPoint(x: 128, y: 128), endRadius: 180, options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
+            }
+            // Deterministic static grain, cached once; no random redraw or frame loop.
+            for i in 0..<1800 {
+                let x = CGFloat((i * 79 + 17) % 256), y = CGFloat((i * 137 + i / 3) % 256)
+                c.setFillColor(UIColor(white: i % 3 == 0 ? 0.65 : 1, alpha: 0.10).cgColor)
+                c.fillEllipse(in: CGRect(x: x, y: y, width: 1.2, height: 1.2))
+            }
+        }.cgImage
+    }()
 
     private func shape(_ path: UIBezierPath, fill: UIColor, stroke: UIColor? = nil, lineWidth: CGFloat = 0.0) -> CAShapeLayer {
         let layer = CAShapeLayer()
@@ -437,12 +468,12 @@ final class WinterSnowmanCanvas: UIView {
     private func arms() -> UIBezierPath {
         let path = UIBezierPath()
         for direction in [CGFloat(-1.0), CGFloat(1.0)] {
-            path.move(to: CGPoint(x: 512.0 + direction * 132.0, y: 444.0))
-            path.addLine(to: CGPoint(x: 512.0 + direction * 290.0, y: 352.0))
-            path.move(to: CGPoint(x: 512.0 + direction * 250.0, y: 375.0))
-            path.addLine(to: CGPoint(x: 512.0 + direction * 252.0, y: 321.0))
-            path.move(to: CGPoint(x: 512.0 + direction * 270.0, y: 364.0))
-            path.addLine(to: CGPoint(x: 512.0 + direction * 318.0, y: 371.0))
+            path.move(to: CGPoint(x: 505.0 + direction * 150.0, y: 565.0))
+            path.addLine(to: CGPoint(x: 505.0 + direction * 300.0, y: 473.0))
+            path.move(to: CGPoint(x: 505.0 + direction * 250.0, y: 500.0))
+            path.addLine(to: CGPoint(x: 505.0 + direction * 252.0, y: 448.0))
+            path.move(to: CGPoint(x: 505.0 + direction * 270.0, y: 489.0))
+            path.addLine(to: CGPoint(x: 505.0 + direction * 328.0, y: 497.0))
         }
         return path
     }

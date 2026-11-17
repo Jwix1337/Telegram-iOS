@@ -34,7 +34,6 @@ public enum SnowHatAssets {
 /// Peer photos remain untouched; size and normalized transforms are resolved at presentation time.
 public final class SnowHatOverlayView: UIView {
     public var avatarFrame: CGRect? { didSet { self.setNeedsLayout() } }
-    public var confinementBounds: CGRect? { didSet { self.setNeedsLayout() } }
     public var onConfigurationChanged: ((Bool) -> Void)?
     public var hasDecoration: Bool { self.configuration != nil }
     private let imageLayer = CALayer()
@@ -112,7 +111,7 @@ public final class SnowHatOverlayView: UIView {
         super.layoutSubviews()
         guard let configuration = self.configuration,
               let image = SnowHatAssets.image(for: configuration.hatID), image.size.width > 0.0 else { return }
-        guard let placement = SnowHatGeometry.placement(configuration: configuration, avatarBounds: self.avatarFrame ?? self.bounds, imageSize: image.size, confinement: self.confinementBounds) else { return }
+        guard let placement = SnowHatGeometry.placement(configuration: configuration, avatarBounds: self.avatarFrame ?? self.bounds, imageSize: image.size) else { return }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         self.imageLayer.bounds = CGRect(origin: .zero, size: placement.size)

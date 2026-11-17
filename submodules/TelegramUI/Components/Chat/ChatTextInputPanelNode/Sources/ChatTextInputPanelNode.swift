@@ -3817,10 +3817,14 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.snowAccumulationSurfaces = [textInputContainerBackgroundFrame]
         self.snowAccumulationCornerRadii = [isAgentLayout ? 20 : floor(minimalInputHeight * 0.5)]
         if !isAgentLayout {
-            if self.attachmentButtonBackground.alpha > 0.01 { self.snowAccumulationSurfaces.append(attachmentButtonFrame); self.snowAccumulationCornerRadii.append(20) }
-            let rightFrame = mediaActionButtonsHidden ? sendActionButtonsFrame : mediaActionButtonsFrame
-            self.snowAccumulationSurfaces.append(rightFrame)
-            self.snowAccumulationCornerRadii.append(min(rightFrame.width, rightFrame.height) / 2)
+            if audioRecordingItemsAlpha > 0.01 { self.snowAccumulationSurfaces.append(attachmentButtonFrame); self.snowAccumulationCornerRadii.append(20) }
+            // The glass microphone disappears during recording. Never leave snow floating
+            // over the recorder's expanding touch target or recording controls.
+            if !isRecording {
+                let rightFrame = mediaActionButtonsHidden ? sendActionButtonsFrame.insetBy(dx: 3, dy: 3) : mediaActionButtonsFrame
+                self.snowAccumulationSurfaces.append(rightFrame)
+                self.snowAccumulationCornerRadii.append(min(rightFrame.width, rightFrame.height) / 2)
+            }
         }
         self.attachmentButtonBackground.update(size: attachmentButtonFrame.size, cornerRadius: 40.0 * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: defaultGlassTintColor, isInteractive: true, transition: ComponentTransition(transition))
 

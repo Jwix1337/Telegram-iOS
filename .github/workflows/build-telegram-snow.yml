@@ -114,6 +114,29 @@ jobs:
             build-input/bazel-9.2.0-darwin-arm64
           key: telegram-snow-downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('versions.json', 'MODULE.bazel', 'MODULE.bazel.lock', '.gitmodules') }}
 
+      # Compiled objects can include private BuildConfig. Publish only an encrypted,
+      # authenticated bundle; no API configuration or plaintext objects enter Actions cache.
+      - name: Locate runner-local compilation cache
+        shell: bash
+        run: |
+          echo "SNOW_ACTION_CACHE=$RUNNER_TEMP/telegram-snow-actions" >> "$GITHUB_ENV"
+          echo "SNOW_ENCRYPTED_CACHE=$RUNNER_TEMP/telegram-snow-encrypted-cache" >> "$GITHUB_ENV"
+
+      - name: Restore encrypted compilation cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        id: compiled
+        with:
+          path: ${{ env.SNOW_ENCRYPTED_CACHE }}
+          key: telegram-snow-compiled-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('versions.json', 'MODULE.bazel', 'MODULE.bazel.lock', '.gitmodules') }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            telegram-snow-compiled-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('versions.json', 'MODULE.bazel', 'MODULE.bazel.lock', '.gitmodules') }}-
+
+      - name: Authenticate and unlock compilation cache
+        env:
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+        run: python3 build-system/SnowEffect/compiled_cache.py restore --cache="$SNOW_ACTION_CACHE" --bundle="$SNOW_ENCRYPTED_CACHE"
+
       - name: Configure the pinned toolchain and Telegram
         id: configure
         shell: bash
@@ -129,11 +152,14 @@ jobs:
       - name: Typecheck SnowEffect before the full application build
         run: python3 build-system/SnowEffect/typecheck_snow_effect.py
 
+      - name: Check Winter geometry and state regressions
+        run: python3 build-system/SnowEffect/test_winter_models.py
+
       - name: Compile the real iPhone application
         shell: bash
         run: |
           set -euo pipefail
-          python3 build-system/Make/Make.py --bazel="$SNOW_BAZEL" build \
+          python3 build-system/Make/Make.py --bazel="$SNOW_BAZEL" --cacheDir="$SNOW_ACTION_CACHE" build \
             --configurationPath="$RUNNER_TEMP/telegram-snow-configuration.json" \
             --xcodeManagedCodesigning --configuration=release_arm64 \
             --buildNumber="$((100000 + GITHUB_RUN_NUMBER))"
@@ -166,3 +192,20 @@ jobs:
             ~/.cache/telegram-snow-repositories
             build-input/bazel-9.2.0-darwin-arm64
           key: ${{ steps.dependencies.outputs.cache-primary-key }}
+
+      - name: Seal bounded compilation cache
+        if: ${{ always() && steps.configure.outcome == 'success' }}
+        env:
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+        shell: bash
+        run: |
+          "$SNOW_BAZEL" shutdown
+          python3 build-system/SnowEffect/compiled_cache.py save --cache="$SNOW_ACTION_CACHE" --bundle="$SNOW_ENCRYPTED_CACHE"
+
+      - name: Save encrypted compilation cache for subsequent builds
+        if: ${{ always() && steps.configure.outcome == 'success' && env.SNOW_CREDENTIAL_SOURCE == 'own-api' }}
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ${{ env.SNOW_ENCRYPTED_CACHE }}
+          key: ${{ steps.compiled.outputs.cache-primary-key }}

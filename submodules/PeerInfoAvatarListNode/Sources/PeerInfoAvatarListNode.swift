@@ -603,7 +603,6 @@ public final class PeerInfoAvatarListItemNode: ASDisplayNode {
         transition.updateFrame(node: self.imageNode, frame: imageFrame)
         transition.updateFrame(view: self.snowHatOverlay, frame: CGRect(x: (size.width - diameter) / 2, y: (size.height - diameter) / 2, width: diameter, height: diameter))
         self.snowHatOverlay.avatarFrame = CGRect(x: diameter * (1 - scale) / 2, y: diameter * (1 - scale), width: imageSize.width, height: imageSize.height)
-        self.snowHatOverlay.confinementBounds = SnowHatLayout.crownBounds(in: CGRect(x: 0, y: 0, width: diameter, height: diameter))
         self.snowHatOverlay.layoutIfNeeded()
         
         transition.updateFrame(node: self.statusNode, frame: CGRect(origin: CGPoint(x: floor((size.width - 50.0) / 2.0), y: floor((size.height - 50.0) / 2.0)), size: CGSize(width: 50.0, height: 50.0)))

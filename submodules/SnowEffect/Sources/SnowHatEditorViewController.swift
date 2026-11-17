@@ -153,13 +153,15 @@ public final class SnowHatEditorViewController: UIViewController, UIGestureRecog
 
     public override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        let diameter = min(166.0, max(80.0, self.previewContainer.bounds.width - 100.0))
-        self.avatar.frame = CGRect(x: (self.previewContainer.bounds.width - diameter) * 0.5, y: 102.0, width: diameter, height: diameter)
-        self.avatar.layer.cornerRadius = diameter * 0.5
+        let side = min(244.0, max(100.0, self.previewContainer.bounds.width - 28))
+        let allocation = CGRect(x: (self.previewContainer.bounds.width - side) / 2, y: (self.previewContainer.bounds.height - side) / 2, width: side, height: side)
+        let photo = SnowHatLayout.photoFrame(in: CGRect(origin: .zero, size: allocation.size), decorated: true)
+        self.avatar.frame = photo.offsetBy(dx: allocation.minX, dy: allocation.minY)
+        self.avatar.layer.cornerRadius = photo.width / 2
         self.avatarPreviewView?.frame = self.avatar.bounds
         self.avatarPreviewLayout?(self.avatar.bounds.size)
-        self.overlay.frame = self.avatar.frame
-        self.overlay.confinementBounds = CGRect(x: 8 - self.avatar.frame.minX, y: 8 - self.avatar.frame.minY, width: self.previewContainer.bounds.width - 16, height: self.avatar.frame.minY + self.avatar.frame.height * 0.72 - 8)
+        self.overlay.frame = allocation
+        self.overlay.avatarFrame = photo
         self.overlay.layoutIfNeeded()
     }
 

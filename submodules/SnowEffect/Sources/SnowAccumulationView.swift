@@ -23,9 +23,23 @@ public final class SnowAccumulationView: UIView, UIGestureRecognizerDelegate {
     private var overflowFrames: [CGRect]?
     private var edgeEmitters: [CAEmitterLayer] = []
     private static let edgeTexture: CGImage? = {
-        let image = UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4)).image { context in
-            UIColor.white.setFill()
-            context.cgContext.fillEllipse(in: CGRect(x: 0.5, y: 0.5, width: 3, height: 3))
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1; format.opaque = false
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 14, height: 14), format: format).image { context in
+            let c = context.cgContext
+            c.setStrokeColor(UIColor(white: 1, alpha: 0.9).cgColor)
+            c.setLineWidth(0.9); c.setLineCap(.round)
+            c.translateBy(x: 7, y: 7)
+            for index in 0..<6 {
+                let angle = CGFloat(index) * .pi / 3
+                let x = cos(angle), y = sin(angle)
+                c.move(to: .zero); c.addLine(to: CGPoint(x: x * 5.6, y: y * 5.6))
+                for direction in [CGFloat(-1), 1] {
+                    c.move(to: CGPoint(x: x * 3.2, y: y * 3.2))
+                    c.addLine(to: CGPoint(x: x * 4.2 - y * 1.4 * direction, y: y * 4.2 + x * 1.4 * direction))
+                }
+            }
+            c.strokePath()
         }
         return image.cgImage
     }()
@@ -217,7 +231,7 @@ public final class SnowAccumulationView: UIView, UIGestureRecognizerDelegate {
         let heights = self.model.heights(maximum: maximum * 0.65)
         let path = UIBezierPath()
         for (index, surface) in self.surfaces.enumerated() {
-            guard let samples = SnowAccumulationSurface.samples(frame: surface, heights: heights, cornerRadius: self.surfaceRadii[index]) else { continue }
+            guard let samples = SnowAccumulationSurface.samples(frame: surface, heights: SnowAccumulationSurface.depositedHeights(heights, width: surface.width), cornerRadius: self.surfaceRadii[index]) else { continue }
             let upper = samples.upper, lower = samples.lower
             guard let first = upper.first else { continue }
             path.move(to: first)
@@ -397,20 +411,23 @@ public final class SnowAccumulationView: UIView, UIGestureRecognizerDelegate {
         for (index, surface) in self.surfaces.enumerated() {
             for side in [CGFloat(-1), 1] {
                 let emitter = CAEmitterLayer()
-                emitter.emitterPosition = CGPoint(x: side < 0 ? surface.minX + 4 : surface.maxX - 4, y: surface.minY + 24 + self.surfaceRadii[index] * 0.36)
+                let heights = SnowAccumulationSurface.depositedHeights(self.model.heights(maximum: SnowEffectPreferences.shared.settings.maximumSnowHeight.rawValue * 0.65), width: surface.width)
+                guard let samples = SnowAccumulationSurface.samples(frame: surface, heights: heights, cornerRadius: self.surfaceRadii[index]),
+                      let edge = side < 0 ? samples.upper.first : samples.upper.last else { continue }
+                emitter.emitterPosition = edge
                 emitter.seed = UInt32.random(in: 1...UInt32.max)
                 emitter.emitterSize = CGSize(width: 3, height: 2)
                 emitter.emitterShape = .line
                 let cell = CAEmitterCell()
                 cell.contents = Self.edgeTexture
-                cell.birthRate = 1.8
-                cell.lifetime = 0.75; cell.lifetimeRange = 0.15
-                cell.velocity = 10; cell.velocityRange = 5
+                cell.birthRate = 6
+                cell.lifetime = 0.65; cell.lifetimeRange = 0.15
+                cell.velocity = 12; cell.velocityRange = 7
                 cell.emissionLongitude = side < 0 ? .pi * 0.75 : .pi * 0.25
                 cell.emissionRange = 0.18
-                cell.xAcceleration = side * 14; cell.yAcceleration = 80
-                cell.scale = 0.85; cell.scaleRange = 0.35
-                cell.alphaSpeed = -1.25
+                cell.xAcceleration = side * 10; cell.yAcceleration = 110
+                cell.scale = 0.20; cell.scaleRange = 0.08
+                cell.alphaSpeed = -1.5
                 cell.spin = 0.3; cell.spinRange = 1
                 emitter.emitterCells = [cell]
                 self.layer.addSublayer(emitter)

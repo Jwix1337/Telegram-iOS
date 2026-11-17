@@ -4,6 +4,16 @@ import XCTest
 @testable import SnowEffect
 
 final class SnowSurfaceTests: XCTestCase {
+    func testMicrophoneDustingIsShallowAndCentredAndRecordingCanRemoveItsSurface() {
+        let profile = [0.0, 8, 16, 4, 0]
+        let compact = SnowAccumulationSurface.depositedHeights(profile, width: 40)
+        XCTAssertEqual(compact, Array(compact.reversed()))
+        XCTAssertLessThan(compact.max() ?? 100, 5)
+        XCTAssertEqual(compact.first, 0)
+        XCTAssertEqual(SnowAccumulationSurface.depositedHeights(profile, width: 240), profile)
+        XCTAssertTrue(SnowAccumulationSurface.depositedHeights(profile, width: 0).isEmpty)
+    }
+
     func testThreePillSurfacesStayInsideTheirOwnHorizontalBoundsAndFollowCurvedTops() throws {
         let surfaces = [CGRect(x: 8, y: 10, width: 40, height: 40), CGRect(x: 54, y: 10, width: 258, height: 90), CGRect(x: 318, y: 60, width: 40, height: 40)]
         let heights = (0...40).map { sin(Double($0) / 40 * .pi) * 6.5 }

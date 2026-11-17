@@ -33,6 +33,14 @@ def main():
                     assert alpha.getextrema()[0] == 0 and bbox, path
                     assert bbox[0] > 0 and bbox[1] > 0 and bbox[2] < size and bbox[3] < size, path
                 images += 1
+    body = CATALOG / 'SnowmanBodyReference.imageset/snow_body.png'
+    with Image.open(body) as image:
+        assert image.mode == 'RGBA' and image.size == (512, 512)
+        assert image.getchannel('A').getextrema()[0] == 0
+    canvas = (ROOT / 'submodules/SnowEffect/Sources/WinterSnowmanViewController.swift').read_text()
+    assert 'WinterSnowmanResources.bareBody' in canvas
+    assert 'WinterSnowmanGeometry.hat' in canvas
+    assert 'WinterSnowmanReadyPreset.matching' not in canvas  # Accessories cannot replace the whole body.
     policy = (ROOT / 'submodules/SnowEffect/Sources/WinterSnowmanAppearance.swift').read_text()
     selectable = re.findall(r'case \w+ = "(\d\d_[a-z_]+)"', policy)
     assert set(selectable) == {'01_classic_red', '05_santa_blue_scarf'}
@@ -40,7 +48,7 @@ def main():
     resources = (ROOT / 'submodules/SnowEffect/Sources/WinterSnowmanResources.swift').read_text()
     assert {int(i) for i in re.findall(r'texture = (\d+)', resources)} == set(range(1, 11))
     assert 'SnowHatConfiguration' not in resources
-    print(f'OK: {images} RGBA PNGs, 16 image sets, 2 completed-state presets, 10 preserved hat texture mappings; no festive/stage selection.')
+    print(f'OK: {images} RGBA PNGs, 16 image sets, 2 preserved ready presets, one bare-body reference, 10 preserved hat texture mappings; no festive or later-stage substitution.')
 
 
 if __name__ == '__main__':

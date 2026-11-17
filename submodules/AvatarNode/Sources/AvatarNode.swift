@@ -1321,10 +1321,13 @@ public final class AvatarNode: ASDisplayNode {
     }
     
     public func updateSize(size: CGSize) {
-        self.contentNode.position = CGPoint(x: size.width / 2, y: size.height * (1 - self.snowHatPhotoScale / 2))
-        self.contentNode.bounds = CGRect(origin: CGPoint(), size: size)
+        let photo = SnowHatLayout.photoFrame(in: CGRect(origin: .zero, size: size), decorated: self.snowHatHasDecoration)
+        let side = min(size.width, size.height)
+        let contentSize = self.snowHatHasDecoration ? CGSize(width: side, height: side) : size
+        self.contentNode.position = photo.center
+        self.contentNode.bounds = CGRect(origin: .zero, size: contentSize)
         
-        self.contentNode.updateSize(size: size)
+        self.contentNode.updateSize(size: contentSize)
         self.contentNode.transform = CATransform3DMakeScale(self.snowHatPhotoScale, self.snowHatPhotoScale, 1)
         
         self.updateStoryIndicator(transition: .immediate)
@@ -1393,11 +1396,10 @@ public final class AvatarNode: ASDisplayNode {
             overlay.configure(accountID: self.snowHatAccountID, peerID: self.snowHatDecorationEnabled ? self.snowHatPeerID : nil)
             let frame = CGRect(origin: .zero, size: self.snowHatSize ?? self.bounds.size)
             overlay.avatarFrame = self.snowHatPhotoFrame
-            overlay.confinementBounds = SnowHatLayout.crownBounds(in: CGRect(origin: .zero, size: frame.size))
-            if overlay.frame != frame {
-                overlay.frame = frame
-                overlay.layoutIfNeeded()
-            }
+            if overlay.frame != frame { overlay.frame = frame }
+            // This overlay is attached as a layer, so UIKit has no superview layout pass.
+            // Identity/configuration changes must lay it out even at an unchanged size.
+            overlay.layoutIfNeeded()
         }
     }
     

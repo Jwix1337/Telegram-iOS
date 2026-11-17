@@ -3,6 +3,17 @@ import CoreGraphics
 
 /// Rounded pill top, separate from its interior and from neighbouring controls.
 enum SnowAccumulationSurface {
+    /// A 40pt microphone needs a shallow dusting, not a scaled copy of the whole input bank.
+    /// Keep compact caps centred instead of magnifying one random off-centre mound.
+    static func depositedHeights(_ profile: [Double], width: CGFloat) -> [Double] {
+        guard width.isFinite, width > 0, profile.count > 1 else { return [] }
+        let scale = min(1, Double(width) / 140)
+        guard width < 80 else { return profile }
+        return profile.indices.map { index in
+            (profile[index] + profile[profile.count - index - 1]) * 0.5 * scale
+        }
+    }
+
     static func samples(frame: CGRect, heights: [Double], cornerRadius: CGFloat? = nil, offsetY: CGFloat = 24) -> (upper: [CGPoint], lower: [CGPoint])? {
         guard frame.width.isFinite, frame.height.isFinite, frame.minX.isFinite, frame.minY.isFinite,
               frame.width > 0, frame.height > 0, heights.count >= 2,

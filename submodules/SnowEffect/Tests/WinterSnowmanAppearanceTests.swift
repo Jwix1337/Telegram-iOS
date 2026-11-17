@@ -1,4 +1,5 @@
 import XCTest
+import CoreGraphics
 @testable import SnowEffect
 
 final class WinterSnowmanAppearanceTests: XCTestCase {
@@ -8,6 +9,19 @@ final class WinterSnowmanAppearanceTests: XCTestCase {
         return .serverSnapshot(id: "11111111-1111-4111-8111-111111111111", inviter: 1, invitee: 2,
             createdAt: 1800000000000, accepted: true, completed: count == 8, parts: parts, version: 10)
     }
+    func testAllTenSnowmanHatsFitHeadWithoutCroppingAndRetainAspect() throws {
+        for style in WinterSnowmanHatStyle.allCases {
+            let art = try XCTUnwrap(SnowHatGeometry.artwork(hatID: style.rawValue))
+            let p = try XCTUnwrap(WinterSnowmanGeometry.hat(style, imageSize: art.crop.size))
+            let frame = CGRect(x: p.center.x - p.size.width / 2, y: p.center.y - p.size.height / 2, width: p.size.width, height: p.size.height)
+            XCTAssertGreaterThan(frame.minY, 0)
+            XCTAssertGreaterThan(frame.minX, 0)
+            XCTAssertLessThan(frame.maxX, 1024)
+            XCTAssertLessThan(frame.maxY, WinterSnowmanGeometry.middle.midY)
+            XCTAssertEqual(p.size.width / p.size.height, art.crop.width / art.crop.height, accuracy: 0.000001)
+        }
+    }
+
     func testAllTenHatIDsAndAllSixScarfColorsRemainRepresentable() {
         XCTAssertEqual(WinterSnowmanHatStyle.allCases.map(\.rawValue), Array(1 ... 10))
         for hat in 1 ... 10 {
