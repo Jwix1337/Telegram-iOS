@@ -25,9 +25,10 @@ final class WinterSnowmanCutoutTests: XCTestCase {
             for y in 0..<512 { for x in 0..<512 where data[(y * 512 + x) * 4 + 3] > 0 {
                 visible += 1
                 XCTAssertGreaterThanOrEqual(y, part == .nose ? 163 : 198)
-                XCTAssertLessThan(y, part == .scarf ? 383 : (part == .nose ? 208 : 294))
+                XCTAssertLessThan(y, part == .scarf ? 390 : (part == .nose ? 208 : 294))
                 XCTAssertGreaterThanOrEqual(x, 90)
                 XCTAssertLessThan(x, 422)
+                if part == .arms { XCTAssertTrue(x < 185 || x > 325, "Arms must not reveal the scarf before it is added") }
             } }
             XCTAssertGreaterThan(visible, part == .scarf ? 5000 : (part == .arms ? 600 : 40))
             XCTAssertEqual(data[(430 * 512 + 250) * 4 + 3], 0)  // Bottom ball.

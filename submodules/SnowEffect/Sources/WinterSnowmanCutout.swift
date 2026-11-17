@@ -20,7 +20,7 @@ enum WinterSnowmanCutout {
         let bounds: (left: Int, top: Int, right: Int, bottom: Int)
         switch part {
         case .arms: bounds = (90, 198, 422, 294)
-        case .scarf: bounds = (148, 203, 350, 383)
+        case .scarf: bounds = (140, 198, 368, 390)
         case .nose: bounds = (238, 163, 292, 208)
         }
         // Flood-fill the exterior of the material mask. Enclosed white embroidery and
@@ -38,6 +38,27 @@ enum WinterSnowmanCutout {
             }
             if belongs { mask[index] = 1 }
         } }
+        // Shadows on red yarn can be brown, and dark wood can be reddish.
+        // Keep the material's actual connected objects, not unrelated colour matches.
+        var components: [[Int]] = []
+        for y in bounds.top..<bounds.bottom { for x in bounds.left..<bounds.right {
+            let start = y * side + x
+            guard mask[start] == 1 else { continue }
+            var component = [start]; mask[start] = 3
+            var cursor = 0
+            while cursor < component.count {
+                let index = component[cursor]; cursor += 1
+                let px = index % side, py = index / side
+                for next in [px > bounds.left ? index - 1 : -1, px + 1 < bounds.right ? index + 1 : -1, py > bounds.top ? index - side : -1, py + 1 < bounds.bottom ? index + side : -1] where next >= 0 && mask[next] == 1 {
+                    mask[next] = 3; component.append(next)
+                }
+            }
+            components.append(component)
+        } }
+        mask = [UInt8](repeating: 0, count: mask.count)
+        for component in components.sorted(by: { $0.count > $1.count }).prefix(part == .arms ? 2 : 1) {
+            for index in component { mask[index] = 1 }
+        }
         var exterior: [Int] = []
         func seed(_ index: Int) {
             if mask[index] == 0 { mask[index] = 2; exterior.append(index) }
